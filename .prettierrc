@@ -7,7 +7,7 @@
       "files": "*.sol",
       "options": {
         "bracketSpacing": true,
-        "compiler": "0.8.23",
+        "compiler": "0.8.26",
         "parser": "solidity-parse",
         "printWidth": 120,
         "tabWidth": 4,

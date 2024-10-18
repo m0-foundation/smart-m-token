@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
 contract MockM {
-    address public ttgRegistrar;
-
     uint128 public currentIndex;
 
     mapping(address account => uint256 balance) public balanceOf;
@@ -30,10 +28,6 @@ contract MockM {
 
     function setCurrentIndex(uint128 currentIndex_) external {
         currentIndex = currentIndex_;
-    }
-
-    function setTtgRegistrar(address ttgRegistrar_) external {
-        ttgRegistrar = ttgRegistrar_;
     }
 
     function startEarning() external {

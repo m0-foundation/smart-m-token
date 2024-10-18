@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
 import { Script, console2 } from "../lib/forge-std/src/Script.sol";
 
@@ -18,6 +18,9 @@ contract DeployProduction is Script, DeployBase {
     error ExpectedProxyMismatch(address expected, address actual);
 
     error ResultingProxyMismatch(address expected, address actual);
+
+    // NOTE: Ensure this is the correct Registrar testnet/mainnet address.
+    address internal constant _REGISTRAR = 0x119FbeeDD4F4f4298Fb59B720d5654442b81ae2c;
 
     // NOTE: Ensure this is the correct M Token testnet/mainnet address.
     address internal constant _M_TOKEN = 0x866A2BF4E572CbcF37D5071A7a58503Bfb36be1b;
@@ -61,7 +64,7 @@ contract DeployProduction is Script, DeployBase {
 
         if (currentNonce_ != _DEPLOYER_PROXY_NONCE - 1) revert UnexpectedDeployerNonce();
 
-        (address implementation_, address proxy_) = deploy(_M_TOKEN, _MIGRATION_ADMIN);
+        (address implementation_, address proxy_) = deploy(_M_TOKEN, _REGISTRAR, _MIGRATION_ADMIN);
 
         vm.stopBroadcast();
 

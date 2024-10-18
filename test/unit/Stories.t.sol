@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
-import { Test } from "../lib/forge-std/src/Test.sol";
+import { Test } from "../../lib/forge-std/src/Test.sol";
 
-import { IWrappedMToken } from "../src/interfaces/IWrappedMToken.sol";
+import { IWrappedMToken } from "../../src/interfaces/IWrappedMToken.sol";
 
-import { WrappedMToken } from "../src/WrappedMToken.sol";
-import { Proxy } from "../src/Proxy.sol";
+import { WrappedMToken } from "../../src/WrappedMToken.sol";
+import { Proxy } from "../../src/Proxy.sol";
 
-import { MockM, MockRegistrar } from "./utils/Mocks.sol";
+import { MockM, MockRegistrar } from "../utils/Mocks.sol";
 
 contract Tests is Test {
     uint56 internal constant _EXP_SCALED_ONE = 1e12;
 
     bytes32 internal constant _EARNERS_LIST = "earners";
-    bytes32 internal constant _MIGRATOR_V1_PREFIX = "wm_migrator_v1";
 
     address internal _alice = makeAddr("alice");
     address internal _bob = makeAddr("bob");
@@ -37,9 +36,8 @@ contract Tests is Test {
 
         _mToken = new MockM();
         _mToken.setCurrentIndex(_EXP_SCALED_ONE);
-        _mToken.setTtgRegistrar(address(_registrar));
 
-        _implementation = new WrappedMToken(address(_mToken), _migrationAdmin);
+        _implementation = new WrappedMToken(address(_mToken), address(_registrar), _migrationAdmin);
 
         _wrappedMToken = IWrappedMToken(address(new Proxy(address(_implementation))));
     }
@@ -369,6 +367,7 @@ contract Tests is Test {
         _registrar.setListContains(_EARNERS_LIST, _alice, true);
         _registrar.setListContains(_EARNERS_LIST, _bob, true);
         _registrar.setListContains(_EARNERS_LIST, address(_wrappedMToken), true);
+
         _mToken.setCurrentIndex(_EXP_SCALED_ONE + 3e11 - 1);
 
         _wrappedMToken.enableEarning();
@@ -403,6 +402,7 @@ contract Tests is Test {
         _registrar.setListContains(_EARNERS_LIST, _alice, true);
         _registrar.setListContains(_EARNERS_LIST, _bob, true);
         _registrar.setListContains(_EARNERS_LIST, address(_wrappedMToken), true);
+
         _mToken.setCurrentIndex(_EXP_SCALED_ONE + 1);
 
         _wrappedMToken.enableEarning();

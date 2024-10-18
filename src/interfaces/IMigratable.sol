@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
 /**
  * @title  Interface for exposing the ability to migrate a contract, extending the ERC-1967 interface.
@@ -23,7 +23,7 @@ interface IMigratable {
      */
     event Upgraded(address indexed implementation);
 
-    /// @notice Emitted when calling `stopEarning` for an account approved as earner by TTG.
+    /// @notice Emitted when calling `stopEarning` for an account approved as earner by the Registrar.
     error InvalidMigrator();
 
     /// @notice Emitted when the delegatecall to a migrator fails.

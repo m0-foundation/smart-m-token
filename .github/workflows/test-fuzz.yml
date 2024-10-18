@@ -20,12 +20,6 @@
 #       - name: Install Foundry
 #         uses: foundry-rs/foundry-toolchain@v1
 #
-#       - name: Run Forge build
-#         run: |
-#           forge --version
-#           make sizes
-#         id: build
-#
 #       - name: Run Forge fuzz tests
 #         run: make fuzz profile=ci
 #         env:

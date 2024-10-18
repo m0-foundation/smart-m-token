@@ -9,13 +9,10 @@ update:; forge update
 
 # Deployment helpers
 deploy:
-	FOUNDRY_PROFILE=production forge script script/Deploy.s.sol --skip src --skip test --rpc-url mainnet --slow --broadcast -vvv --verify
-
-deploy-sepolia:
-	FOUNDRY_PROFILE=production forge script script/Deploy.s.sol --skip src --skip test --rpc-url sepolia --slow --broadcast -vvv
+	FOUNDRY_PROFILE=production forge script script/DeployProduction.s.sol --skip src --skip test --rpc-url mainnet --slow --broadcast -vvv --verify
 
 deploy-local:
-	FOUNDRY_PROFILE=production forge script script/Deploy.s.sol --skip src --skip test --rpc-url localhost --slow --broadcast -v
+	FOUNDRY_PROFILE=production forge script script/DeployProduction.s.sol --skip src --skip test --rpc-url localhost --slow --broadcast -vvv
 
 # Run slither
 slither :

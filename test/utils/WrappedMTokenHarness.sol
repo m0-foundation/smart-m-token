@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
 import { WrappedMToken } from "../../src/WrappedMToken.sol";
 
 contract WrappedMTokenHarness is WrappedMToken {
-    constructor(address mToken_, address migrationAdmin_) WrappedMToken(mToken_, migrationAdmin_) {}
+    constructor(
+        address mToken_,
+        address registrar_,
+        address migrationAdmin_
+    ) WrappedMToken(mToken_, registrar_, migrationAdmin_) {}
 
     function setIsEarningOf(address account_, bool isEarning_) external {
         _accounts[account_].isEarning = isEarning_;

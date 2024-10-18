@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
 import { IERC20Extended } from "../../lib/common/src/interfaces/IERC20Extended.sol";
 
@@ -62,8 +62,11 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     /// @notice Emitted when trying to enable earning after it has been explicitly disabled.
     error EarningCannotBeReenabled();
 
-    /// @notice Emitted when calling `stopEarning` for an account approved as earner by TTG.
-    error IsApprovedEarner();
+    /**
+     * @notice Emitted when calling `stopEarning` for an account approved as earner by the Registrar.
+     * @param  account The account that is an approved earner.
+     */
+    error IsApprovedEarner(address account);
 
     /**
      * @notice Emitted when there is insufficient balance to decrement from `account`.
@@ -73,8 +76,11 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      */
     error InsufficientBalance(address account, uint240 balance, uint240 amount);
 
-    /// @notice Emitted when calling `startEarning` for an account not approved as earner by TTG.
-    error NotApprovedEarner();
+    /**
+     * @notice Emitted when calling `startEarning` for an account not approved as earner by the Registrar.
+     * @param  account The account that is not an approved earner.
+     */
+    error NotApprovedEarner(address account);
 
     /// @notice Emitted when the non-governance migrate function is called by a account other than the migration admin.
     error UnauthorizedMigration();
@@ -84,6 +90,9 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
 
     /// @notice Emitted in constructor if Migration Admin is 0x0.
     error ZeroMigrationAdmin();
+
+    /// @notice Emitted in constructor if Registrar is 0x0.
+    error ZeroRegistrar();
 
     /* ============ Interactive Functions ============ */
 
@@ -130,23 +139,35 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      */
     function claimExcess() external returns (uint240 excess);
 
-    /// @notice Enables earning for the wrapper if allowed by TTG and if it has never been done.
+    /// @notice Enables earning for the wrapper if allowed by the Registrar and if it has never been done.
     function enableEarning() external;
 
-    /// @notice Disables earning for the wrapper if disallowed by TTG and if it has never been done.
+    /// @notice Disables earning for the wrapper if disallowed by the Registrar and if it has never been done.
     function disableEarning() external;
 
     /**
-     * @notice Starts earning for `account` if allowed by TTG.
+     * @notice Starts earning for `account` if allowed by the Registrar.
      * @param  account The account to start earning for.
      */
     function startEarningFor(address account) external;
 
     /**
-     * @notice Stops earning for `account` if disallowed by TTG.
+     * @notice Starts earning for multiple accounts if individually allowed by the Registrar.
+     * @param  accounts The accounts to start earning for.
+     */
+    function startEarningFor(address[] calldata accounts) external;
+
+    /**
+     * @notice Stops earning for `account` if disallowed by the Registrar.
      * @param  account The account to stop earning for.
      */
     function stopEarningFor(address account) external;
+
+    /**
+     * @notice Stops earning for multiple accounts if individually disallowed by the Registrar.
+     * @param  accounts The account to stop earning for.
+     */
+    function stopEarningFor(address[] calldata accounts) external;
 
     /* ============ Temporary Admin Migration ============ */
 
@@ -205,13 +226,13 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     /// @notice Whether earning has been enabled at least once or not.
     function wasEarningEnabled() external view returns (bool wasEnabled);
 
-    /// @notice The account that can bypass TTG and call the `migrate(address migrator)` function.
+    /// @notice The account that can bypass the Registrar and call the `migrate(address migrator)` function.
     function migrationAdmin() external view returns (address migrationAdmin);
 
     /// @notice The address of the M Token contract.
     function mToken() external view returns (address mToken);
 
-    /// @notice The address of the TTG registrar.
+    /// @notice The address of the Registrar.
     function registrar() external view returns (address registrar);
 
     /// @notice The portion of total supply that is not earning yield.

@@ -2,18 +2,17 @@
 gas_reports = ["*"]
 gas_reports_ignore = []
 ignored_error_codes = []
-optimizer = false
-solc_version = "0.8.23"
-verbosity = 3
-block_number = 20_270_778
-block_timestamp = 1_720_550_400
-fork_block_number = 20_270_778
-rpc_storage_caching = { chains = ["mainnet"], endpoints = "all" }
-evm_version = "shanghai"
-
-[profile.production]
 optimizer = true
 optimizer_runs = 999999
+solc_version = "0.8.26"
+verbosity = 3
+block_number = 20_270_778
+block_timestamp = 1_726_598_340
+fork_block_number = 20_772_165
+rpc_storage_caching = { chains = ["mainnet"], endpoints = "all" }
+evm_version = "cancun"
+
+[profile.production]
 build_info = true
 sizes = true
 
@@ -24,10 +23,6 @@ runs = 100
 runs = 512            # The number of calls to make in the invariant tests
 depth = 25            # The number of times to run the invariant tests
 fail_on_revert = true # Fail the test if the contract reverts
-
-[profile.ci]
-optimizer = true
-optimizer_runs = 999999
 
 [profile.ci.fuzz]
 runs = 10_000
