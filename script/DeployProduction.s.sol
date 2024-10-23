@@ -22,6 +22,9 @@ contract DeployProduction is Script, DeployBase {
     // NOTE: Ensure this is the correct Registrar testnet/mainnet address.
     address internal constant _REGISTRAR = 0x119FbeeDD4F4f4298Fb59B720d5654442b81ae2c;
 
+    // NOTE: Ensure this is the correct Excess Destination testnet/mainnet address.
+    address internal constant _EXCESS_DESTINATION = 0xd7298f620B0F752Cf41BD818a16C756d9dCAA34f; // Vault
+
     // NOTE: Ensure this is the correct M Token testnet/mainnet address.
     address internal constant _M_TOKEN = 0x866A2BF4E572CbcF37D5071A7a58503Bfb36be1b;
 
@@ -64,7 +67,7 @@ contract DeployProduction is Script, DeployBase {
 
         if (currentNonce_ != _DEPLOYER_PROXY_NONCE - 1) revert UnexpectedDeployerNonce();
 
-        (address implementation_, address proxy_) = deploy(_M_TOKEN, _REGISTRAR, _MIGRATION_ADMIN);
+        (address implementation_, address proxy_) = deploy(_M_TOKEN, _REGISTRAR, _EXCESS_DESTINATION, _MIGRATION_ADMIN);
 
         vm.stopBroadcast();
 

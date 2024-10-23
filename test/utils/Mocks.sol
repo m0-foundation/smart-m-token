@@ -40,8 +40,6 @@ contract MockM {
 }
 
 contract MockRegistrar {
-    address public vault;
-
     mapping(bytes32 key => bytes32 value) public get;
 
     mapping(bytes32 list => mapping(address account => bool contains)) public listContains;
@@ -52,9 +50,5 @@ contract MockRegistrar {
 
     function setListContains(bytes32 list_, address account_, bool contains_) external {
         listContains[list_][account_] = contains_;
-    }
-
-    function setVault(address vault_) external {
-        vault = vault_;
     }
 }

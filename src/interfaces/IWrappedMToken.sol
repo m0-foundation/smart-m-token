@@ -85,6 +85,9 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     /// @notice Emitted when the non-governance migrate function is called by a account other than the migration admin.
     error UnauthorizedMigration();
 
+    /// @notice Emitted in constructor if Excess Destination is 0x0.
+    error ZeroExcessDestination();
+
     /// @notice Emitted in constructor if M Token is 0x0.
     error ZeroMToken();
 
@@ -179,6 +182,18 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
 
     /* ============ View/Pure Functions ============ */
 
+    /// @notice Registrar key holding value of whether the earners list can be ignored or not.
+    function EARNERS_LIST_IGNORED_KEY() external pure returns (bytes32 earnersListIgnoredKey);
+
+    /// @notice Registrar key of earners list.
+    function EARNERS_LIST_NAME() external pure returns (bytes32 earnersListName);
+
+    /// @notice Registrar key prefix to determine the override recipient of an account's accrued yield.
+    function CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX() external pure returns (bytes32 claimOverrideRecipientKeyPrefix);
+
+    /// @notice Registrar key prefix to determine the migrator contract.
+    function MIGRATOR_KEY_PREFIX() external pure returns (bytes32 migratorKeyPrefix);
+
     /**
      * @notice Returns the yield accrued for `account`, which is claimable.
      * @param  account The account being queried.
@@ -247,6 +262,6 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     /// @notice The principal of totalEarningSupply to help compute totalAccruedYield(), and thus excess().
     function principalOfTotalEarningSupply() external view returns (uint112 principalOfTotalEarningSupply);
 
-    /// @notice The address of the vault where excess is claimed to.
-    function vault() external view returns (address vault);
+    /// @notice The address of the destination where excess is claimed to.
+    function excessDestination() external view returns (address excessDestination);
 }

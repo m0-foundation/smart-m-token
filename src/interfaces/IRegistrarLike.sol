@@ -23,7 +23,4 @@ interface IRegistrarLike {
      * @return contains Whether `list` contains `account` or not.
      */
     function listContains(bytes32 list, address account) external view returns (bool contains);
-
-    /// @notice Returns the address of the Vault.
-    function vault() external view returns (address vault);
 }

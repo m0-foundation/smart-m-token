@@ -57,6 +57,9 @@ contract UniswapV3IntegrationTests is TestBase {
         _poolBalanceOfWM = _wrappedMToken.balanceOf(_pool);
 
         _excess = _wrappedMToken.excess();
+
+        _deployV2Components();
+        _migrate();
     }
 
     function test_state() external view {

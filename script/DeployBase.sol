@@ -19,12 +19,13 @@ contract DeployBase {
     function deploy(
         address mToken_,
         address registrar_,
+        address excessDestination_,
         address migrationAdmin_
     ) public virtual returns (address implementation_, address proxy_) {
         // Wrapped M token needs `mToken_`, `registrar_`, and `migrationAdmin_` addresses.
         // Proxy needs `implementation_` addresses.
 
-        implementation_ = address(new WrappedMToken(mToken_, registrar_, migrationAdmin_));
+        implementation_ = address(new WrappedMToken(mToken_, registrar_, excessDestination_, migrationAdmin_));
         proxy_ = address(new Proxy(implementation_));
     }
 

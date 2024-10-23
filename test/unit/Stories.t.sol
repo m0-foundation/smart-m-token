@@ -21,9 +21,8 @@ contract Tests is Test {
     address internal _carol = makeAddr("carol");
     address internal _dave = makeAddr("dave");
 
+    address internal _excessDestination = makeAddr("excessDestination");
     address internal _migrationAdmin = makeAddr("migrationAdmin");
-
-    address internal _vault = makeAddr("vault");
 
     MockM internal _mToken;
     MockRegistrar internal _registrar;
@@ -32,12 +31,11 @@ contract Tests is Test {
 
     function setUp() external {
         _registrar = new MockRegistrar();
-        _registrar.setVault(_vault);
 
         _mToken = new MockM();
         _mToken.setCurrentIndex(_EXP_SCALED_ONE);
 
-        _implementation = new WrappedMToken(address(_mToken), address(_registrar), _migrationAdmin);
+        _implementation = new WrappedMToken(address(_mToken), address(_registrar), _excessDestination, _migrationAdmin);
 
         _wrappedMToken = IWrappedMToken(address(new Proxy(address(_implementation))));
     }

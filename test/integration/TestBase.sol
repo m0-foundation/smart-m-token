@@ -17,7 +17,7 @@ contract TestBase is Test {
 
     address internal constant _minterGateway = 0xf7f9638cb444D65e5A40bF5ff98ebE4ff319F04E;
     address internal constant _registrar = 0x119FbeeDD4F4f4298Fb59B720d5654442b81ae2c;
-    address internal constant _vault = 0xd7298f620B0F752Cf41BD818a16C756d9dCAA34f;
+    address internal constant _excessDestination = 0xd7298f620B0F752Cf41BD818a16C756d9dCAA34f; // vault
     address internal constant _standardGovernor = 0xB024aC5a7c6bC92fbACc8C3387E628a07e1Da016;
     address internal constant _mSource = 0x563AA56D0B627d1A734e04dF5762F5Eea1D56C2f;
     address internal constant _wmSource = 0xfE940BFE535013a52e8e2DF9644f95E3C94fa14B;
@@ -142,7 +142,9 @@ contract TestBase is Test {
     }
 
     function _deployV2Components() internal {
-        _implementationV2 = address(new WrappedMToken(address(_mToken), _registrar, _migrationAdmin));
+        _implementationV2 = address(
+            new WrappedMToken(address(_mToken), _registrar, _excessDestination, _migrationAdmin)
+        );
         _migratorV1 = address(new MigratorV1(_implementationV2));
     }
 

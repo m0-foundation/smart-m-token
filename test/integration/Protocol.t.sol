@@ -32,6 +32,19 @@ contract ProtocolIntegrationTests is TestBase {
         _wrappedMToken.startEarningFor(_bob);
 
         _totalEarningSupplyOfM = _mToken.totalEarningSupply();
+
+        _deployV2Components();
+        _migrate();
+    }
+
+    function test_constants() external view {
+        assertEq(_wrappedMToken.EARNERS_LIST_IGNORED_KEY(), "earners_list_ignored");
+        assertEq(_wrappedMToken.EARNERS_LIST_NAME(), "earners");
+        assertEq(_wrappedMToken.CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX(), "wm_claim_override_recipient");
+        assertEq(_wrappedMToken.MIGRATOR_KEY_PREFIX(), "wm_migrator_v2");
+        assertEq(_wrappedMToken.name(), "M by M^0 (wrapped)");
+        assertEq(_wrappedMToken.symbol(), "wM");
+        assertEq(_wrappedMToken.decimals(), 6);
     }
 
     function test_initialState() external {
@@ -551,10 +564,10 @@ contract ProtocolIntegrationTests is TestBase {
 
         assertGe(_wrapperBalanceOfM = _mToken.balanceOf(address(_wrappedMToken)), _excess);
 
-        uint256 vaultStartingBalance_ = _mToken.balanceOf(_vault);
+        uint256 vaultStartingBalance_ = _mToken.balanceOf(_excessDestination);
 
         assertEq(_wrappedMToken.claimExcess(), _excess);
-        assertEq(_mToken.balanceOf(_vault), _excess + vaultStartingBalance_);
+        assertEq(_mToken.balanceOf(_excessDestination), _excess + vaultStartingBalance_);
 
         // Assert Globals
         assertEq(_wrappedMToken.totalEarningSupply(), 0);

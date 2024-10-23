@@ -34,6 +34,9 @@ contract MorphoBlueTests is MorphoTestBase {
         _morphoBalanceOfWM = _wrappedMToken.balanceOf(_MORPHO);
 
         _excess = _wrappedMToken.excess();
+
+        _deployV2Components();
+        _migrate();
     }
 
     function test_state() external view {

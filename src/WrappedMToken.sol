@@ -39,17 +39,17 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
 
     /* ============ Variables ============ */
 
-    /// @dev Registrar key holding value of whether the earners list can be ignored or not.
-    bytes32 internal constant _EARNERS_LIST_IGNORED = "earners_list_ignored";
+    /// @inheritdoc IWrappedMToken
+    bytes32 public constant EARNERS_LIST_IGNORED_KEY = "earners_list_ignored";
 
-    /// @dev Registrar key of earners list.
-    bytes32 internal constant _EARNERS_LIST = "earners";
+    /// @inheritdoc IWrappedMToken
+    bytes32 public constant EARNERS_LIST_NAME = "earners";
 
-    /// @dev Registrar key prefix to determine the override recipient of an account's accrued yield.
-    bytes32 internal constant _CLAIM_OVERRIDE_RECIPIENT_PREFIX = "wm_claim_override_recipient";
+    /// @inheritdoc IWrappedMToken
+    bytes32 public constant CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX = "wm_claim_override_recipient";
 
-    /// @dev Registrar key prefix to determine the migrator contract.
-    bytes32 internal constant _MIGRATOR_V2_PREFIX = "wm_migrator_v2";
+    /// @inheritdoc IWrappedMToken
+    bytes32 public constant MIGRATOR_KEY_PREFIX = "wm_migrator_v2";
 
     /// @inheritdoc IWrappedMToken
     address public immutable migrationAdmin;
@@ -61,7 +61,7 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
     address public immutable registrar;
 
     /// @inheritdoc IWrappedMToken
-    address public immutable vault;
+    address public immutable excessDestination;
 
     /// @inheritdoc IWrappedMToken
     uint112 public principalOfTotalEarningSupply;
@@ -90,13 +90,13 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
     constructor(
         address mToken_,
         address registrar_,
+        address excessDestination_,
         address migrationAdmin_
-    ) ERC20Extended("WrappedM by M^0", "wM", 6) {
+    ) ERC20Extended("M by M^0 (wrapped)", "wM", 6) {
         if ((mToken = mToken_) == address(0)) revert ZeroMToken();
         if ((registrar = registrar_) == address(0)) revert ZeroRegistrar();
+        if ((excessDestination = excessDestination_) == address(0)) revert ZeroExcessDestination();
         if ((migrationAdmin = migrationAdmin_) == address(0)) revert ZeroMigrationAdmin();
-
-        vault = IRegistrarLike(registrar_).vault();
     }
 
     /* ============ Interactive Functions ============ */
@@ -130,7 +130,7 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
     function claimExcess() external returns (uint240 excess_) {
         emit ExcessClaimed(excess_ = excess());
 
-        IMTokenLike(mToken).transfer(vault, excess_);
+        IMTokenLike(mToken).transfer(excessDestination, excess_);
     }
 
     /// @inheritdoc IWrappedMToken
@@ -241,7 +241,9 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
             address(
                 uint160(
                     uint256(
-                        IRegistrarLike(registrar).get(keccak256(abi.encode(_CLAIM_OVERRIDE_RECIPIENT_PREFIX, account_)))
+                        IRegistrarLike(registrar).get(
+                            keccak256(abi.encode(CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX, account_))
+                        )
                     )
                 )
             );
@@ -691,7 +693,7 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
             address(
                 uint160(
                     // NOTE: A subsequent implementation should use a unique migrator prefix.
-                    uint256(IRegistrarLike(registrar).get(keccak256(abi.encode(_MIGRATOR_V2_PREFIX, address(this)))))
+                    uint256(IRegistrarLike(registrar).get(keccak256(abi.encode(MIGRATOR_KEY_PREFIX, address(this)))))
                 )
             );
     }
@@ -703,8 +705,8 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
      */
     function _isApprovedEarner(address account_) internal view returns (bool isApproved_) {
         return
-            IRegistrarLike(registrar).get(_EARNERS_LIST_IGNORED) != bytes32(0) ||
-            IRegistrarLike(registrar).listContains(_EARNERS_LIST, account_);
+            IRegistrarLike(registrar).get(EARNERS_LIST_IGNORED_KEY) != bytes32(0) ||
+            IRegistrarLike(registrar).listContains(EARNERS_LIST_NAME, account_);
     }
 
     /**
