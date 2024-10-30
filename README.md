@@ -35,7 +35,13 @@ cp .env.example .env
 Run the following command to compile the contracts:
 
 ```bash
-forge compile
+npm run build
+```
+
+or
+
+```bash
+make build
 ```
 
 ### Coverage
@@ -44,6 +50,12 @@ Forge is used for coverage, run it with:
 
 ```bash
 npm run coverage
+```
+
+or
+
+```bash
+make coverage
 ```
 
 You can then consult the report by opening `coverage/index.html`:
@@ -57,19 +69,13 @@ open coverage/index.html
 To run all tests:
 
 ```bash
-forge test
-```
-
-Run test that matches a test contract:
-
-```bash
-forge test --mc <test-contract-name>
+make tests
 ```
 
 Test a specific test case:
 
 ```bash
-forge test --mt <test-case-name>
+./test.sh -v -t <test-case-name>
 ```
 
 To run slither:

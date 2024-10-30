@@ -5,12 +5,13 @@ pragma solidity 0.8.26;
 import { IERC20 } from "../../lib/common/src/interfaces/IERC20.sol";
 import { IERC20Extended } from "../../lib/common/src/interfaces/IERC20Extended.sol";
 import { IERC712 } from "../../lib/common/src/interfaces/IERC712.sol";
+
+import { Proxy } from "../../lib/common/src/Proxy.sol";
 import { Test } from "../../lib/forge-std/src/Test.sol";
 
 import { IWrappedMToken } from "../../src/interfaces/IWrappedMToken.sol";
 
 import { EarnerManager } from "../../src/EarnerManager.sol";
-import { Proxy } from "../../src/Proxy.sol";
 import { WrappedMToken } from "../../src/WrappedMToken.sol";
 import { WrappedMTokenMigratorV1 } from "../../src/WrappedMTokenMigratorV1.sol";
 
@@ -24,7 +25,7 @@ contract TestBase is Test {
     address internal constant _excessDestination = 0xd7298f620B0F752Cf41BD818a16C756d9dCAA34f; // vault
     address internal constant _standardGovernor = 0xB024aC5a7c6bC92fbACc8C3387E628a07e1Da016;
     address internal constant _mSource = 0x563AA56D0B627d1A734e04dF5762F5Eea1D56C2f;
-    address internal constant _wmSource = 0xfE940BFE535013a52e8e2DF9644f95E3C94fa14B;
+    address internal constant _wmSource = 0xa969cFCd9e583edb8c8B270Dc8CaFB33d6Cf662D;
 
     IWrappedMToken internal constant _wrappedMToken = IWrappedMToken(0x437cc33344a0B27A429f795ff6B469C72698B291);
 

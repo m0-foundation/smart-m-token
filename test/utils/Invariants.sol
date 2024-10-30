@@ -2,11 +2,10 @@
 
 pragma solidity 0.8.26;
 
+import { IndexingMath } from "../../lib/common/src/libs/IndexingMath.sol";
 // import { console2 } from "../../lib/forge-std/src/Test.sol";
 
 import { IERC20 } from "../../lib/common/src/interfaces/IERC20.sol";
-
-import { IndexingMath } from "../../src/libs/IndexingMath.sol";
 
 import { IWrappedMToken } from "../../src/interfaces/IWrappedMToken.sol";
 

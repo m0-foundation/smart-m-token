@@ -3,10 +3,10 @@
 pragma solidity 0.8.26;
 
 import { ContractHelper } from "../lib/common/src/libs/ContractHelper.sol";
+import { Proxy } from "../lib/common/src/Proxy.sol";
 
 import { WrappedMToken } from "../src/WrappedMToken.sol";
 import { EarnerManager } from "../src/EarnerManager.sol";
-import { Proxy } from "../src/Proxy.sol";
 
 contract DeployBase {
     /**

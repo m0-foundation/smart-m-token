@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.26;
 
-import { IMigratable } from "./IMigratable.sol";
+import { IMigratable } from "../../lib/common/src/interfaces/IMigratable.sol";
 
 /**
  * @title  Earner Status Manager interface for setting and returning earner status for Wrapped M Token accounts.
@@ -62,6 +62,8 @@ interface IEarnerManager is IMigratable {
 
     /**
      * @notice Sets the status for `account` to `status`.
+     * @notice If approving an earner that is already earning, but was recently removed from the Registrar earners list,
+     *         call `wrappedM.stopEarning(account)` before calling this, then call `wrappedM.startEarning(account)`.
      * @param  account The account under which yield could generate.
      * @param  status  Whether the account is an earner, according to the admin.
      * @param  feeRate The fee rate to be taken from the yield.
@@ -70,6 +72,8 @@ interface IEarnerManager is IMigratable {
 
     /**
      * @notice Sets the status for multiple accounts.
+     * @notice If approving an earner that is already earning, but was recently removed from the Registrar earners list,
+     *         call `wrappedM.stopEarning(account)` before calling this, then call `wrappedM.startEarning(account)`.
      * @param  accounts The accounts under which yield could generate.
      * @param  statuses Whether each account is an earner, respectively, according to the admin.
      * @param  feeRates The fee rates to be taken from the yield, respectively.

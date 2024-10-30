@@ -3,8 +3,7 @@
 pragma solidity 0.8.26;
 
 import { IERC20Extended } from "../../lib/common/src/interfaces/IERC20Extended.sol";
-
-import { IMigratable } from "./IMigratable.sol";
+import { IMigratable } from "../../lib/common/src/interfaces/IMigratable.sol";
 
 /**
  * @title  Wrapped M Token interface extending Extended ERC20.
@@ -29,19 +28,19 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     event ClaimRecipientSet(address indexed account, address indexed claimRecipient);
 
     /**
-     * @notice Emitted when earning is enabled for the entire wrapper.
+     * @notice Emitted when Wrapped M earning is enabled.
      * @param  index The index at the moment earning is enabled.
      */
     event EarningEnabled(uint128 index);
 
     /**
-     * @notice Emitted when earning is disabled for the entire wrapper.
+     * @notice Emitted when Wrapped M earning is disabled.
      * @param  index The index at the moment earning is disabled.
      */
     event EarningDisabled(uint128 index);
 
     /**
-     * @notice Emitted when the wrapper's excess M is claimed.
+     * @notice Emitted when this contract's excess M is claimed.
      * @param  excess The amount of excess M claimed.
      */
     event ExcessClaimed(uint240 excess);
@@ -70,7 +69,7 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     error EarningCannotBeReenabled();
 
     /**
-     * @notice Emitted when calling `stopEarning` for an account approved as earner by the Registrar.
+     * @notice Emitted when calling `mToken.stopEarning` for an account approved as an earner.
      * @param  account The account that is an approved earner.
      */
     error IsApprovedEarner(address account);
@@ -84,7 +83,7 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     error InsufficientBalance(address account, uint240 balance, uint240 amount);
 
     /**
-     * @notice Emitted when calling `startEarning` for an account not approved as earner by the Registrar.
+     * @notice Emitted when calling `mToken.startEarning` for an account not approved as an.
      * @param  account The account that is not an approved earner.
      */
     error NotApprovedEarner(address account);
@@ -184,37 +183,37 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     function claimFor(address account) external returns (uint240 yield);
 
     /**
-     * @notice Claims any excess M of the wrapper.
+     * @notice Claims any excess M of this contract.
      * @return excess The amount of excess claimed.
      */
     function claimExcess() external returns (uint240 excess);
 
-    /// @notice Enables earning for the wrapper if allowed by the Registrar and if it has never been done.
+    /// @notice Enables earning of Wrapped M if allowed by the Registrar and if it has never been done.
     function enableEarning() external;
 
-    /// @notice Disables earning for the wrapper if disallowed by the Registrar and if it has never been done.
+    /// @notice Disables earning of Wrapped M if disallowed by the Registrar and if it has never been done.
     function disableEarning() external;
 
     /**
-     * @notice Starts earning for `account` if allowed by the Registrar.
+     * @notice Starts earning for `account` if allowed by the Earner Manager.
      * @param  account The account to start earning for.
      */
     function startEarningFor(address account) external;
 
     /**
-     * @notice Starts earning for multiple accounts if individually allowed by the Registrar.
+     * @notice Starts earning for multiple accounts if individually allowed by the Earner Manager.
      * @param  accounts The accounts to start earning for.
      */
     function startEarningFor(address[] calldata accounts) external;
 
     /**
-     * @notice Stops earning for `account` if disallowed by the Registrar.
+     * @notice Stops earning for `account` if disallowed by the Earner Manager.
      * @param  account The account to stop earning for.
      */
     function stopEarningFor(address account) external;
 
     /**
-     * @notice Stops earning for multiple accounts if individually disallowed by the Registrar.
+     * @notice Stops earning for multiple accounts if individually disallowed by the Earner Manager.
      * @param  accounts The account to stop earning for.
      */
     function stopEarningFor(address[] calldata accounts) external;
@@ -278,10 +277,10 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      */
     function claimRecipientFor(address account) external view returns (address recipient);
 
-    /// @notice The current index of the wrapper's earning mechanism.
+    /// @notice The current index of Wrapped M's earning mechanism.
     function currentIndex() external view returns (uint128 index);
 
-    /// @notice The current excess M of the wrapper that is not earmarked for account balances or accrued yield.
+    /// @notice This contract's current excess M that is not earmarked for account balances or accrued yield.
     function excess() external view returns (uint240 excess);
 
     /**
@@ -291,10 +290,10 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      */
     function isEarning(address account) external view returns (bool isEarning);
 
-    /// @notice Whether earning is enabled for the entire wrapper.
+    /// @notice Whether Wrapped M earning is enabled.
     function isEarningEnabled() external view returns (bool isEnabled);
 
-    /// @notice Whether earning has been enabled at least once or not.
+    /// @notice Whether Wrapped M earning has been enabled at least once.
     function wasEarningEnabled() external view returns (bool wasEnabled);
 
     /// @notice The account that can bypass the Registrar and call the `migrate(address migrator)` function.

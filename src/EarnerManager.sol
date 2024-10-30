@@ -2,10 +2,10 @@
 
 pragma solidity 0.8.26;
 
+import { Migratable } from "../lib/common/src/Migratable.sol";
+
 import { IEarnerManager } from "./interfaces/IEarnerManager.sol";
 import { IRegistrarLike } from "./interfaces/IRegistrarLike.sol";
-
-import { Migratable } from "./Migratable.sol";
 
 /**
  * @title  Earner Manager allows admins to define earners without governance, and take fees from yield.

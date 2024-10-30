@@ -2,19 +2,18 @@
 
 pragma solidity 0.8.26;
 
+import { IndexingMath } from "../lib/common/src/libs/IndexingMath.sol";
 import { UIntMath } from "../lib/common/src/libs/UIntMath.sol";
 
 import { IERC20 } from "../lib/common/src/interfaces/IERC20.sol";
 import { ERC20Extended } from "../lib/common/src/ERC20Extended.sol";
 
-import { IndexingMath } from "./libs/IndexingMath.sol";
+import { Migratable } from "../lib/common/src/Migratable.sol";
 
 import { IEarnerManager } from "./interfaces/IEarnerManager.sol";
 import { IMTokenLike } from "./interfaces/IMTokenLike.sol";
 import { IRegistrarLike } from "./interfaces/IRegistrarLike.sol";
 import { IWrappedMToken } from "./interfaces/IWrappedMToken.sol";
-
-import { Migratable } from "./Migratable.sol";
 
 /*
 
@@ -36,10 +35,11 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
 
     /**
      * @dev   Struct to represent an account's balance and yield earning details
-     * @param isEarning        Whether the account is actively earning yield.
-     * @param balance          The present amount of tokens held by the account.
-     * @param lastIndex        The index of the last interaction for the account (0 for non-earning accounts).
-     * @param hasEarnerDetails Whether the account has additional details for earning yield.
+     * @param isEarning         Whether the account is actively earning yield.
+     * @param balance           The present amount of tokens held by the account.
+     * @param lastIndex         The index of the last interaction for the account (0 for non-earning accounts).
+     * @param hasEarnerDetails  Whether the account has additional details for earning yield.
+     * @param hasClaimRecipient Whether the account has an explicitly set claim recipient.
      */
     struct Account {
         // First Slot
@@ -658,7 +658,7 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
         // NOTE: When this WrappedMToken contract is earning, any amount of M sent to it is converted to a principal
         //       amount at the MToken contract, which when represented as a present amount, may be a rounding error
         //       amount less than `amount_`. In order to capture the real increase in M, the difference between the
-        //       starting and ending M balance is minted as WrappedM.
+        //       starting and ending M balance is minted as WrappedM token.
         _mint(recipient_, wrapped_ = UIntMath.safe240(IMTokenLike(mToken).balanceOf(address(this)) - startingBalance_));
     }
 
@@ -787,12 +787,12 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
 
     /**
      * @dev    Compute the adjusted amount of M that can safely be transferred out given the current index.
-     * @param  amount_       Some amount to be transferred out of the wrapper.
+     * @param  amount_       Some amount to be transferred out of this contract.
      * @param  currentIndex_ The current index.
      * @return safeAmount_   The adjusted amount that can safely be transferred out.
      */
     function _getSafeTransferableM(uint240 amount_, uint128 currentIndex_) internal view returns (uint240 safeAmount_) {
-        // If the wrapper is earning, adjust `amount_` to ensure it's M balance decrement is limited to `amount_`.
+        // If this contract is earning, adjust `amount_` to ensure it's M balance decrement is limited to `amount_`.
         return
             IMTokenLike(mToken).isEarning(address(this))
                 ? IndexingMath.getPresentAmountRoundedDown(

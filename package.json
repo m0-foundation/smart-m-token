@@ -14,10 +14,9 @@
   "scripts": {
     "build": "make -B build",
     "clean": "make -B clean",
-    "compile": "forge compile",
     "coverage": "make -B coverage",
+    "deploy": "make -B deploy",
     "deploy-local": "make -B deploy-local",
-    "deploy-sepolia": "make -B deploy-sepolia",
     "doc": "forge doc --serve --port 4000",
     "lint-staged": "lint-staged",
     "prepack": "npm run clean && npm run build",

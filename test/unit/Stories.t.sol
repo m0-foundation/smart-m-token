@@ -2,19 +2,20 @@
 
 pragma solidity 0.8.26;
 
+import { Proxy } from "../../lib/common/src/Proxy.sol";
 import { Test } from "../../lib/forge-std/src/Test.sol";
 
 import { IWrappedMToken } from "../../src/interfaces/IWrappedMToken.sol";
 
 import { WrappedMToken } from "../../src/WrappedMToken.sol";
-import { Proxy } from "../../src/Proxy.sol";
 
 import { MockEarnerManager, MockM, MockRegistrar } from "../utils/Mocks.sol";
 
-contract Tests is Test {
+contract StoryTests is Test {
     uint56 internal constant _EXP_SCALED_ONE = 1e12;
 
-    bytes32 internal constant _EARNERS_LIST = "earners";
+    bytes32 internal constant _EARNERS_LIST_NAME = "earners";
+    bytes32 internal constant _ADMINS_LIST_NAME = "em_admins";
 
     address internal _alice = makeAddr("alice");
     address internal _bob = makeAddr("bob");
@@ -54,7 +55,7 @@ contract Tests is Test {
     function test_story() external {
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
-        _registrar.setListContains(_EARNERS_LIST, address(_wrappedMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_wrappedMToken), true);
 
         _wrappedMToken.enableEarning();
 
@@ -375,7 +376,7 @@ contract Tests is Test {
     function test_noExcessCreep() external {
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
-        _registrar.setListContains(_EARNERS_LIST, address(_wrappedMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_wrappedMToken), true);
 
         _mToken.setCurrentIndex(_EXP_SCALED_ONE + 3e11 - 1);
 
@@ -410,7 +411,7 @@ contract Tests is Test {
     function test_dustWrapping() external {
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
-        _registrar.setListContains(_EARNERS_LIST, address(_wrappedMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_wrappedMToken), true);
 
         _mToken.setCurrentIndex(_EXP_SCALED_ONE + 1);
 
