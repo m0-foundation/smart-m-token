@@ -70,3 +70,23 @@ contract MockRegistrar {
         listContains[list_][account_] = contains_;
     }
 }
+
+contract MockEarnerManager {
+    struct EarnerDetails {
+        bool status;
+        uint16 feeRate;
+        address admin;
+    }
+
+    mapping(address account => EarnerDetails earnerDetails) internal _earnerDetails;
+
+    function setEarnerDetails(address account_, bool status_, uint16 feeRate_, address admin_) external {
+        _earnerDetails[account_] = EarnerDetails(status_, feeRate_, admin_);
+    }
+
+    function getEarnerDetails(address account_) external view returns (bool status_, uint16 feeRate_, address admin_) {
+        EarnerDetails storage earnerDetails_ = _earnerDetails[account_];
+
+        return (earnerDetails_.status, earnerDetails_.feeRate, earnerDetails_.admin);
+    }
+}

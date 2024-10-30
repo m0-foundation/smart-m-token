@@ -95,6 +95,9 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     /// @notice Emitted in an account is 0x0.
     error ZeroAccount();
 
+    /// @notice Emitted in constructor if Earner Manager is 0x0.
+    error ZeroEarnerManager();
+
     /// @notice Emitted in constructor if Excess Destination is 0x0.
     error ZeroExcessDestination();
 
@@ -232,6 +235,9 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
 
     /* ============ View/Pure Functions ============ */
 
+    /// @notice 100% in basis points.
+    function HUNDRED_PERCENT() external pure returns (uint16 hundredPercent);
+
     /// @notice Registrar key holding value of whether the earners list can be ignored or not.
     function EARNERS_LIST_IGNORED_KEY() external pure returns (bytes32 earnersListIgnoredKey);
 
@@ -299,6 +305,9 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
 
     /// @notice The address of the Registrar.
     function registrar() external view returns (address registrar);
+
+    /// @notice The address of the Earner Manager.
+    function earnerManager() external view returns (address earnerManager);
 
     /// @notice The portion of total supply that is not earning yield.
     function totalNonEarningSupply() external view returns (uint240 totalSupply);

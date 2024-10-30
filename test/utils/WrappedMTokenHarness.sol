@@ -8,9 +8,10 @@ contract WrappedMTokenHarness is WrappedMToken {
     constructor(
         address mToken_,
         address registrar_,
+        address earnerManager_,
         address excessDestination_,
         address migrationAdmin_
-    ) WrappedMToken(mToken_, registrar_, excessDestination_, migrationAdmin_) {}
+    ) WrappedMToken(mToken_, registrar_, earnerManager_, excessDestination_, migrationAdmin_) {}
 
     function internalWrap(address account_, address recipient_, uint240 amount_) external returns (uint240 wrapped_) {
         return _wrap(account_, recipient_, amount_);
@@ -32,8 +33,14 @@ contract WrappedMTokenHarness is WrappedMToken {
         _accounts[account_].lastIndex = uint128(index_);
     }
 
-    function setAccountOf(address account_, uint256 balance_, uint256 index_, bool hasClaimRecipient_) external {
-        _accounts[account_] = Account(true, uint240(balance_), uint128(index_), hasClaimRecipient_);
+    function setAccountOf(
+        address account_,
+        uint256 balance_,
+        uint256 index_,
+        bool hasClaimRecipient_,
+        bool hasEarnerDetails_
+    ) external {
+        _accounts[account_] = Account(true, uint240(balance_), uint128(index_), hasClaimRecipient_, hasEarnerDetails_);
     }
 
     function setAccountOf(address account_, uint256 balance_) external {

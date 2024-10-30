@@ -37,8 +37,11 @@ contract DeployProduction is Script, DeployBase {
     // NOTE: Ensure this is the correct nonce to use to deploy the Proxy on testnet/mainnet.
     uint256 internal constant _DEPLOYER_PROXY_NONCE = 40;
 
-    // NOTE: Ensure this is the correct expected testnet/mainnet address for the Proxy.
-    address internal constant _EXPECTED_PROXY = 0x437cc33344a0B27A429f795ff6B469C72698B291;
+    // NOTE: Ensure this is the correct expected testnet/mainnet address for the Wrapped M Token Proxy.
+    address internal constant _EXPECTED_WRAPPED_M_TOKEN_PROXY = address(0);
+
+    // NOTE: Ensure this is the correct expected testnet/mainnet address for the Earner Manager Proxy.
+    address internal constant _EXPECTED_EARNER_MANAGER_PROXY = address(0);
 
     function run() external {
         address deployer_ = vm.rememberKey(vm.envUint("PRIVATE_KEY"));
@@ -53,7 +56,8 @@ contract DeployProduction is Script, DeployBase {
 
         address expectedProxy_ = getExpectedWrappedMTokenProxy(deployer_, _DEPLOYER_PROXY_NONCE);
 
-        if (expectedProxy_ != _EXPECTED_PROXY) revert ExpectedProxyMismatch(_EXPECTED_PROXY, expectedProxy_);
+        if (expectedProxy_ != _EXPECTED_WRAPPED_M_TOKEN_PROXY)
+            revert ExpectedProxyMismatch(_EXPECTED_WRAPPED_M_TOKEN_PROXY, expectedProxy_);
 
         vm.startBroadcast(deployer_);
 
@@ -67,13 +71,26 @@ contract DeployProduction is Script, DeployBase {
 
         if (currentNonce_ != _DEPLOYER_PROXY_NONCE - 1) revert UnexpectedDeployerNonce();
 
-        (address implementation_, address proxy_) = deploy(_M_TOKEN, _REGISTRAR, _EXCESS_DESTINATION, _MIGRATION_ADMIN);
+        (
+            address earnerManagerProxy_,
+            address earnerManagerImplementation_,
+            address wrappedMTokenImplementation_,
+            address wrappedMTokenProxy_
+        ) = deploy(_M_TOKEN, _REGISTRAR, _EXCESS_DESTINATION, _MIGRATION_ADMIN);
 
         vm.stopBroadcast();
 
-        console2.log("Wrapped M Implementation address:", implementation_);
-        console2.log("Wrapped M Proxy address:", proxy_);
+        console2.log("Earner Manager Proxy address:", earnerManagerProxy_);
+        console2.log("Earner Manager Implementation address:", earnerManagerImplementation_);
+        console2.log("Wrapped M Implementation address:", wrappedMTokenImplementation_);
+        console2.log("Wrapped M Proxy address:", wrappedMTokenProxy_);
 
-        if (proxy_ != _EXPECTED_PROXY) revert ResultingProxyMismatch(_EXPECTED_PROXY, proxy_);
+        if (wrappedMTokenProxy_ != _EXPECTED_WRAPPED_M_TOKEN_PROXY) {
+            revert ResultingProxyMismatch(_EXPECTED_WRAPPED_M_TOKEN_PROXY, wrappedMTokenProxy_);
+        }
+
+        if (earnerManagerProxy_ != _EXPECTED_EARNER_MANAGER_PROXY) {
+            revert ResultingProxyMismatch(_EXPECTED_EARNER_MANAGER_PROXY, earnerManagerProxy_);
+        }
     }
 }
