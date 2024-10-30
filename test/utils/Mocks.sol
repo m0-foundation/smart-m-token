@@ -8,6 +8,24 @@ contract MockM {
     mapping(address account => uint256 balance) public balanceOf;
     mapping(address account => bool isEarning) public isEarning;
 
+    function permit(
+        address owner_,
+        address spender_,
+        uint256 value_,
+        uint256 deadline_,
+        uint8 v_,
+        bytes32 r_,
+        bytes32 s_
+    ) external {}
+
+    function permit(
+        address owner_,
+        address spender_,
+        uint256 value_,
+        uint256 deadline_,
+        bytes memory signature_
+    ) external {}
+
     function transfer(address recipient_, uint256 amount_) external returns (bool success_) {
         balanceOf[msg.sender] -= amount_;
         balanceOf[recipient_] += amount_;

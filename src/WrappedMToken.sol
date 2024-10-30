@@ -112,6 +112,32 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
     }
 
     /// @inheritdoc IWrappedMToken
+    function wrapWithPermit(
+        address recipient_,
+        uint256 amount_,
+        uint256 deadline_,
+        uint8 v_,
+        bytes32 r_,
+        bytes32 s_
+    ) external returns (uint240 wrapped_) {
+        IMTokenLike(mToken).permit(msg.sender, address(this), amount_, deadline_, v_, r_, s_);
+
+        return _wrap(msg.sender, recipient_, UIntMath.safe240(amount_));
+    }
+
+    /// @inheritdoc IWrappedMToken
+    function wrapWithPermit(
+        address recipient_,
+        uint256 amount_,
+        uint256 deadline_,
+        bytes memory signature_
+    ) external returns (uint240 wrapped_) {
+        IMTokenLike(mToken).permit(msg.sender, address(this), amount_, deadline_, signature_);
+
+        return _wrap(msg.sender, recipient_, UIntMath.safe240(amount_));
+    }
+
+    /// @inheritdoc IWrappedMToken
     function unwrap(address recipient_, uint256 amount_) external returns (uint240 unwrapped_) {
         return _unwrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }

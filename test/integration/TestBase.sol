@@ -3,6 +3,8 @@
 pragma solidity 0.8.26;
 
 import { IERC20 } from "../../lib/common/src/interfaces/IERC20.sol";
+import { IERC20Extended } from "../../lib/common/src/interfaces/IERC20Extended.sol";
+import { IERC712 } from "../../lib/common/src/interfaces/IERC712.sol";
 import { Test } from "../../lib/forge-std/src/Test.sol";
 
 import { IWrappedMToken } from "../../src/interfaces/IWrappedMToken.sol";
@@ -53,6 +55,8 @@ contract TestBase is Test {
     address internal _henry = makeAddr("henry");
     address internal _ivan = makeAddr("ivan");
     address internal _judy = makeAddr("judy");
+
+    uint256 internal _aliceKey = _makeKey("alice");
 
     address[] internal _accounts = [_alice, _bob, _carol, _dave, _eric, _frank, _grace, _henry, _ivan, _judy];
 
@@ -112,6 +116,34 @@ contract TestBase is Test {
         _wrappedMToken.wrap(recipient_);
     }
 
+    function _wrapWithPermitVRS(
+        address account_,
+        uint256 signerPrivateKey_,
+        address recipient_,
+        uint256 amount_,
+        uint256 nonce_,
+        uint256 deadline_
+    ) internal {
+        (uint8 v_, bytes32 r_, bytes32 s_) = _getPermit(account_, signerPrivateKey_, amount_, nonce_, deadline_);
+
+        vm.prank(account_);
+        _wrappedMToken.wrapWithPermit(recipient_, amount_, deadline_, v_, r_, s_);
+    }
+
+    function _wrapWithPermitSignature(
+        address account_,
+        uint256 signerPrivateKey_,
+        address recipient_,
+        uint256 amount_,
+        uint256 nonce_,
+        uint256 deadline_
+    ) internal {
+        (uint8 v_, bytes32 r_, bytes32 s_) = _getPermit(account_, signerPrivateKey_, amount_, nonce_, deadline_);
+
+        vm.prank(account_);
+        _wrappedMToken.wrapWithPermit(recipient_, amount_, deadline_, abi.encodePacked(r_, s_, v_));
+    }
+
     function _unwrap(address account_, address recipient_, uint256 amount_) internal {
         vm.prank(account_);
         _wrappedMToken.unwrap(recipient_, amount_);
@@ -160,5 +192,40 @@ contract TestBase is Test {
     function _migrateFromAdmin() internal {
         vm.prank(_migrationAdmin);
         _wrappedMToken.migrate(_migratorV1);
+    }
+
+    /* ============ utils ============ */
+
+    function _makeKey(string memory name_) internal returns (uint256 key_) {
+        (, key_) = makeAddrAndKey(name_);
+    }
+
+    function _getPermit(
+        address account_,
+        uint256 signerPrivateKey_,
+        uint256 amount_,
+        uint256 nonce_,
+        uint256 deadline_
+    ) internal view returns (uint8 v_, bytes32 r_, bytes32 s_) {
+        return
+            vm.sign(
+                signerPrivateKey_,
+                keccak256(
+                    abi.encodePacked(
+                        "\x19\x01",
+                        IERC712(address(_mToken)).DOMAIN_SEPARATOR(),
+                        keccak256(
+                            abi.encode(
+                                IERC20Extended(address(_mToken)).PERMIT_TYPEHASH(),
+                                account_,
+                                address(_wrappedMToken),
+                                amount_,
+                                nonce_,
+                                deadline_
+                            )
+                        )
+                    )
+                )
+            );
     }
 }
