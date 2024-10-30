@@ -22,6 +22,13 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     event Claimed(address indexed account, address indexed recipient, uint240 yield);
 
     /**
+     * @notice Emitted when `account` set their yield claim recipient.
+     * @param  account        The account that set their yield claim recipient.
+     * @param  claimRecipient The account that will receive the yield.
+     */
+    event ClaimRecipientSet(address indexed account, address indexed claimRecipient);
+
+    /**
      * @notice Emitted when earning is enabled for the entire wrapper.
      * @param  index The index at the moment earning is enabled.
      */
@@ -84,6 +91,9 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
 
     /// @notice Emitted when the non-governance migrate function is called by a account other than the migration admin.
     error UnauthorizedMigration();
+
+    /// @notice Emitted in an account is 0x0.
+    error ZeroAccount();
 
     /// @notice Emitted in constructor if Excess Destination is 0x0.
     error ZeroExcessDestination();
@@ -206,6 +216,12 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      */
     function stopEarningFor(address[] calldata accounts) external;
 
+    /**
+     * @notice Explicitly sets the recipient of any yield claimed for the caller.
+     * @param  claimRecipient The account that will receive the caller's yield.
+     */
+    function setClaimRecipient(address claimRecipient) external;
+
     /* ============ Temporary Admin Migration ============ */
 
     /**
@@ -254,7 +270,7 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      * @param  account   The account being queried.
      * @return recipient The address of the recipient, if any, to override as the destination of claimed yield.
      */
-    function claimOverrideRecipientFor(address account) external view returns (address recipient);
+    function claimRecipientFor(address account) external view returns (address recipient);
 
     /// @notice The current index of the wrapper's earning mechanism.
     function currentIndex() external view returns (uint128 index);

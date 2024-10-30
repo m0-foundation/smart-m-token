@@ -35,6 +35,7 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
         bool isEarning;
         uint240 balance;
         uint128 lastIndex;
+        bool hasClaimRecipient;
     }
 
     /* ============ Variables ============ */
@@ -77,6 +78,8 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
 
     /// @dev Array of indices at which earning was enabled or disabled.
     uint128[] internal _enableDisableEarningIndices;
+
+    mapping(address account => address claimRecipient) internal _claimRecipients;
 
     /* ============ Constructor ============ */
 
@@ -226,6 +229,13 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
         }
     }
 
+    /// @inheritdoc IWrappedMToken
+    function setClaimRecipient(address claimRecipient_) external {
+        _accounts[msg.sender].hasClaimRecipient = (_claimRecipients[msg.sender] = claimRecipient_) != address(0);
+
+        emit ClaimRecipientSet(msg.sender, claimRecipient_);
+    }
+
     /* ============ Temporary Admin Migration ============ */
 
     /// @inheritdoc IWrappedMToken
@@ -262,17 +272,19 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
     }
 
     /// @inheritdoc IWrappedMToken
-    function claimOverrideRecipientFor(address account_) public view returns (address recipient_) {
+    function claimRecipientFor(address account_) public view returns (address recipient_) {
         return
-            address(
-                uint160(
-                    uint256(
-                        IRegistrarLike(registrar).get(
-                            keccak256(abi.encode(CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX, account_))
+            (_accounts[account_].hasClaimRecipient)
+                ? _claimRecipients[account_]
+                : address(
+                    uint160(
+                        uint256(
+                            IRegistrarLike(registrar).get(
+                                keccak256(abi.encode(CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX, account_))
+                            )
                         )
                     )
-                )
-            );
+                );
     }
 
     /// @inheritdoc IWrappedMToken
@@ -330,7 +342,7 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
      */
     function _mint(address recipient_, uint240 amount_) internal {
         _revertIfInsufficientAmount(amount_);
-        _revertIfInvalidRecipient(recipient_);
+        _revertIfZeroAccount(recipient_);
 
         if (_accounts[recipient_].isEarning) {
             uint128 currentIndex_ = currentIndex();
@@ -462,7 +474,7 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
             totalEarningSupply += yield_;
         }
 
-        address claimOverrideRecipient_ = claimOverrideRecipientFor(account_);
+        address claimOverrideRecipient_ = claimRecipientFor(account_);
         address claimRecipient_ = claimOverrideRecipient_ == address(0) ? account_ : claimOverrideRecipient_;
 
         // Emit the appropriate `Claimed` and `Transfer` events, depending on the claim override recipient
@@ -483,7 +495,8 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
      * @param currentIndex_ The current index.
      */
     function _transfer(address sender_, address recipient_, uint240 amount_, uint128 currentIndex_) internal {
-        _revertIfInvalidRecipient(recipient_);
+        _revertIfZeroAccount(sender_);
+        _revertIfZeroAccount(recipient_);
 
         // Claims for both the sender and recipient are required before transferring since add an subtract functions
         // assume accounts' balances are up-to-date with the current index.
@@ -753,11 +766,11 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
     }
 
     /**
-     * @dev   Reverts if `recipient_` is address(0).
-     * @param recipient_ Address of a recipient.
+     * @dev   Reverts if `account_` is address(0).
+     * @param account_ Address of an account.
      */
-    function _revertIfInvalidRecipient(address recipient_) internal pure {
-        if (recipient_ == address(0)) revert InvalidRecipient(recipient_);
+    function _revertIfZeroAccount(address account_) internal pure {
+        if (account_ == address(0)) revert ZeroAccount();
     }
 
     /**

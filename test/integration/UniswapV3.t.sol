@@ -138,7 +138,7 @@ contract UniswapV3IntegrationTests is TestBase {
 
         assertTrue(_wrappedMToken.isEarning(_pool));
 
-        assertEq(_wrappedMToken.claimOverrideRecipientFor(_pool), _carol);
+        assertEq(_wrappedMToken.claimRecipientFor(_pool), _carol);
 
         assertEq(_wrappedMToken.balanceOf(_pool), _poolBalanceOfWM);
         assertEq(_wrappedMToken.accruedYieldOf(_pool), _poolAccruedYield);
@@ -249,7 +249,7 @@ contract UniswapV3IntegrationTests is TestBase {
         // Check that the pool is earning WM
         assertTrue(_wrappedMToken.isEarning(_pool));
 
-        assertEq(_wrappedMToken.claimOverrideRecipientFor(_pool), _carol);
+        assertEq(_wrappedMToken.claimRecipientFor(_pool), _carol);
 
         assertEq(_wrappedMToken.balanceOf(_pool), _poolBalanceOfWM);
         assertEq(_wrappedMToken.accruedYieldOf(_pool), _poolAccruedYield);
@@ -357,7 +357,7 @@ contract UniswapV3IntegrationTests is TestBase {
 
         assertTrue(_wrappedMToken.isEarning(_pool));
 
-        assertEq(_wrappedMToken.claimOverrideRecipientFor(_pool), _carol);
+        assertEq(_wrappedMToken.claimRecipientFor(_pool), _carol);
 
         /* ============ Alice Mints New LP Position ============ */
 
@@ -484,7 +484,7 @@ contract UniswapV3IntegrationTests is TestBase {
 
         assertTrue(_wrappedMToken.isEarning(_pool));
 
-        assertEq(_wrappedMToken.claimOverrideRecipientFor(_pool), _carol);
+        assertEq(_wrappedMToken.claimRecipientFor(_pool), _carol);
 
         /* ============ Fund Alice (Non-Earner) and Bob (Earner) ============ */
 

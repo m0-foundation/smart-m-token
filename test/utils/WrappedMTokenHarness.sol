@@ -32,12 +32,16 @@ contract WrappedMTokenHarness is WrappedMToken {
         _accounts[account_].lastIndex = uint128(index_);
     }
 
-    function setAccountOf(address account_, uint256 balance_, uint256 index_) external {
-        _accounts[account_] = Account(true, uint240(balance_), uint128(index_));
+    function setAccountOf(address account_, uint256 balance_, uint256 index_, bool hasClaimRecipient_) external {
+        _accounts[account_] = Account(true, uint240(balance_), uint128(index_), hasClaimRecipient_);
     }
 
     function setAccountOf(address account_, uint256 balance_) external {
-        _accounts[account_] = Account(false, uint240(balance_), 0);
+        _accounts[account_] = Account(false, uint240(balance_), 0, false);
+    }
+
+    function setInternalClaimRecipient(address account_, address claimRecipient_) external {
+        _claimRecipients[account_] = claimRecipient_;
     }
 
     function setTotalNonEarningSupply(uint256 totalNonEarningSupply_) external {
@@ -52,8 +56,24 @@ contract WrappedMTokenHarness is WrappedMToken {
         principalOfTotalEarningSupply = uint112(principalOfTotalEarningSupply_);
     }
 
-    function getAccountOf(address account_) external view returns (bool isEarning_, uint240 balance_, uint128 index_) {
+    function getAccountOf(
+        address account_
+    )
+        external
+        view
+        returns (bool isEarning_, uint240 balance_, uint128 index_, bool hasEarnerDetails_, bool hasClaimRecipient_)
+    {
         Account storage account = _accounts[account_];
-        return (account.isEarning, account.balance, account.lastIndex);
+        return (
+            account.isEarning,
+            account.balance,
+            account.lastIndex,
+            account.hasEarnerDetails,
+            account.hasClaimRecipient
+        );
+    }
+
+    function getInternalClaimRecipientOf(address account_) external view returns (address claimRecipient_) {
+        return _claimRecipients[account_];
     }
 }
