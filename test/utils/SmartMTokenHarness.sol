@@ -29,22 +29,33 @@ contract SmartMTokenHarness is SmartMToken {
         _accounts[account_].isEarning = isEarning_;
     }
 
-    function setLastIndexOf(address account_, uint256 index_) external {
-        _accounts[account_].lastIndex = uint128(index_);
+    function setEarningPrincipalOf(address account_, uint256 earningPrincipal_) external {
+        _accounts[account_].earningPrincipal = uint112(earningPrincipal_);
     }
 
     function setAccountOf(
         address account_,
         uint256 balance_,
-        uint256 index_,
+        uint256 earningPrincipal_,
         bool hasEarnerDetails_,
         bool hasClaimRecipient_
     ) external {
-        _accounts[account_] = Account(true, uint240(balance_), uint128(index_), hasEarnerDetails_, hasClaimRecipient_);
+        _accounts[account_] = Account(
+            true,
+            uint240(balance_),
+            1,
+            uint112(earningPrincipal_),
+            hasEarnerDetails_,
+            hasClaimRecipient_
+        );
     }
 
     function setAccountOf(address account_, uint256 balance_) external {
-        _accounts[account_] = Account(false, uint240(balance_), 0, false, false);
+        _accounts[account_] = Account(false, uint240(balance_), 1, 0, false, false);
+    }
+
+    function setHasEarnerDetails(address account_, bool hasEarnerDetails_) external {
+        _accounts[account_].hasEarnerDetails = hasEarnerDetails_;
     }
 
     function setInternalClaimRecipient(address account_, address claimRecipient_) external {
@@ -59,8 +70,16 @@ contract SmartMTokenHarness is SmartMToken {
         totalEarningSupply = uint240(totalEarningSupply_);
     }
 
-    function setPrincipalOfTotalEarningSupply(uint256 principalOfTotalEarningSupply_) external {
-        principalOfTotalEarningSupply = uint112(principalOfTotalEarningSupply_);
+    function setPrincipalOfTotalEarningSupply(uint256 totalEarningPrincipal_) external {
+        totalEarningPrincipal = uint112(totalEarningPrincipal_);
+    }
+
+    function setEnableMIndex(uint256 enableMIndex_) external {
+        enableMIndex = uint128(enableMIndex_);
+    }
+
+    function setDisableIndex(uint256 disableIndex_) external {
+        disableIndex = uint128(disableIndex_);
     }
 
     function getAccountOf(
@@ -68,13 +87,19 @@ contract SmartMTokenHarness is SmartMToken {
     )
         external
         view
-        returns (bool isEarning_, uint240 balance_, uint128 index_, bool hasEarnerDetails_, bool hasClaimRecipient_)
+        returns (
+            bool isEarning_,
+            uint240 balance_,
+            uint112 earningPrincipal_,
+            bool hasEarnerDetails_,
+            bool hasClaimRecipient_
+        )
     {
         Account storage account = _accounts[account_];
         return (
             account.isEarning,
             account.balance,
-            account.lastIndex,
+            account.earningPrincipal,
             account.hasEarnerDetails,
             account.hasClaimRecipient
         );

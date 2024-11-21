@@ -90,26 +90,23 @@ library Invariants {
 
     // Invariant 4: Sum of all earning accounts' principals is less than or equal to principal of total earning supply.
     function checkInvariant4(address smartMToken_, address[] memory accounts_) internal view returns (bool success_) {
-        uint256 principalOfTotalEarningSupply_;
+        uint256 totalEarningPrincipal_;
 
         for (uint256 i_; i_ < accounts_.length; ++i_) {
             address account_ = accounts_[i_];
 
             if (!ISmartMToken(smartMToken_).isEarning(account_)) continue;
 
-            principalOfTotalEarningSupply_ += IndexingMath.getPrincipalAmountRoundedDown(
-                uint240(ISmartMToken(smartMToken_).balanceOf(account_)),
-                ISmartMToken(smartMToken_).lastIndexOf(account_)
-            );
+            totalEarningPrincipal_ += ISmartMToken(smartMToken_).earningPrincipalOf(account_);
         }
 
-        // console2.log("Invariant 2: principalOfTotalEarningSupply_ = %d", principalOfTotalEarningSupply_);
+        // console2.log("Invariant 2: totalEarningPrincipal_ = %d", totalEarningPrincipal_);
 
         // console2.log(
-        //     "Invariant 2: principalOfTotalEarningSupply()         = %d",
-        //     ISmartMToken(smartMToken_).principalOfTotalEarningSupply()
+        //     "Invariant 2: totalEarningPrincipal()         = %d",
+        //     ISmartMToken(smartMToken_).totalEarningPrincipal()
         // );
 
-        return ISmartMToken(smartMToken_).principalOfTotalEarningSupply() >= principalOfTotalEarningSupply_;
+        return ISmartMToken(smartMToken_).totalEarningPrincipal() >= totalEarningPrincipal_;
     }
 }

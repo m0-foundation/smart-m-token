@@ -9,7 +9,7 @@ import { IERC20Extended } from "../../lib/common/src/interfaces/IERC20Extended.s
 
 import { UIntMath } from "../../lib/common/src/libs/UIntMath.sol";
 import { Proxy } from "../../lib/common/src/Proxy.sol";
-import { Test, console2 } from "../../lib/forge-std/src/Test.sol";
+import { Test } from "../../lib/forge-std/src/Test.sol";
 
 import { ISmartMToken } from "../../src/interfaces/ISmartMToken.sol";
 
@@ -19,9 +19,10 @@ import { SmartMTokenHarness } from "../utils/SmartMTokenHarness.sol";
 // TODO: Test for `totalAccruedYield()`.
 // TODO: All operations involving earners should include demonstration of accrued yield being added to their balance.
 // TODO: Add relevant unit tests while earning enabled/disabled.
+// TODO: Replace all enableEarning with manually setting enable and disable indexes (and remove registrar add).
 
 contract SmartMTokenTests is Test {
-    uint56 internal constant _EXP_SCALED_ONE = 1e12;
+    uint56 internal constant _EXP_SCALED_ONE = IndexingMath.EXP_SCALED_ONE;
     uint56 internal constant _ONE_HUNDRED_PERCENT = 10_000;
     bytes32 internal constant _CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX = "wm_claim_override_recipient";
 
@@ -37,7 +38,7 @@ contract SmartMTokenTests is Test {
 
     address[] internal _accounts = [_alice, _bob, _charlie, _david];
 
-    uint128 internal _currentIndex;
+    uint128 internal _currentMIndex;
 
     MockEarnerManager internal _earnerManager;
     MockM internal _mToken;
@@ -49,7 +50,6 @@ contract SmartMTokenTests is Test {
         _registrar = new MockRegistrar();
 
         _mToken = new MockM();
-        _mToken.setCurrentIndex(_EXP_SCALED_ONE);
 
         _earnerManager = new MockEarnerManager();
 
@@ -62,8 +62,6 @@ contract SmartMTokenTests is Test {
         );
 
         _smartMToken = SmartMTokenHarness(address(new Proxy(address(_implementation))));
-
-        _mToken.setCurrentIndex(_currentIndex = 1_100000068703);
     }
 
     /* ============ constructor ============ */
@@ -140,15 +138,38 @@ contract SmartMTokenTests is Test {
         assertEq(_smartMToken.balanceOf(_alice), 1_000);
         assertEq(_smartMToken.totalNonEarningSupply(), 1_000);
         assertEq(_smartMToken.totalEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 0);
     }
 
-    function test_internalWrap_toEarner() external {
+    function test_internalWrap_toEarner_principalOverflows() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setAccountOf(_alice, 0, _EXP_SCALED_ONE, false, false);
+        _smartMToken.setAccountOf(_alice, 0, 0, false, false);
+
+        uint240 amount_ = _getMaxAmount(1_100000000001);
+
+        _mToken.setBalanceOf(_alice, amount_);
+
+        vm.expectRevert(UIntMath.InvalidUInt112.selector);
+
+        _smartMToken.internalWrap(_alice, _alice, amount_);
+    }
+
+    function test_internalWrap_toEarner_smallAmounts() external {
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
+        _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
+
+        _smartMToken.setTotalEarningSupply(1_000);
+        _smartMToken.setPrincipalOfTotalEarningSupply(955);
+
+        _smartMToken.setAccountOf(_alice, 1_000, 955, false, false); // 1_050 balance with yield.
 
         _mToken.setBalanceOf(_alice, 1_002);
 
@@ -157,34 +178,67 @@ contract SmartMTokenTests is Test {
 
         assertEq(_smartMToken.internalWrap(_alice, _alice, 999), 999);
 
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
-        assertEq(_smartMToken.balanceOf(_alice), 999);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 955 + 908);
+        assertEq(_smartMToken.balanceOf(_alice), 1_000 + 999);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 50);
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 909);
-        assertEq(_smartMToken.totalEarningSupply(), 999);
+        assertEq(_smartMToken.totalEarningPrincipal(), 955 + 908);
+        assertEq(_smartMToken.totalEarningSupply(), 1_000 + 999);
+        assertEq(_smartMToken.totalAccruedYield(), 50);
 
         vm.expectEmit();
         emit IERC20.Transfer(address(0), _alice, 1);
 
         assertEq(_smartMToken.internalWrap(_alice, _alice, 1), 1);
 
-        // No change due to principal round down on wrap.
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
-        assertEq(_smartMToken.balanceOf(_alice), 1_000);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 955 + 908 + 0);
+        assertEq(_smartMToken.balanceOf(_alice), 1_000 + 999 + 1);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 49);
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 910);
-        assertEq(_smartMToken.totalEarningSupply(), 1_000);
+        assertEq(_smartMToken.totalEarningPrincipal(), 955 + 908 + 0);
+        assertEq(_smartMToken.totalEarningSupply(), 1_000 + 999 + 1);
+        assertEq(_smartMToken.totalAccruedYield(), 49);
 
         vm.expectEmit();
         emit IERC20.Transfer(address(0), _alice, 2);
 
         assertEq(_smartMToken.internalWrap(_alice, _alice, 2), 2);
 
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
-        assertEq(_smartMToken.balanceOf(_alice), 1_002);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 955 + 908 + 0 + 1);
+        assertEq(_smartMToken.balanceOf(_alice), 1_000 + 999 + 1 + 2);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 48);
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 912);
-        assertEq(_smartMToken.totalEarningSupply(), 1_002);
+        assertEq(_smartMToken.totalEarningPrincipal(), 955 + 908 + 0 + 1);
+        assertEq(_smartMToken.totalEarningSupply(), 1_000 + 999 + 1 + 2);
+        assertEq(_smartMToken.totalAccruedYield(), 48);
+    }
+
+    function test_internalWrap_toEarner() external {
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
+        _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
+
+        _smartMToken.setTotalEarningSupply(1_000_000e6);
+        _smartMToken.setPrincipalOfTotalEarningSupply(955_000e6);
+
+        _smartMToken.setAccountOf(_alice, 1_000_000e6, 955_000e6, false, false); // 1_050_500e6 balance with yield.
+
+        _mToken.setBalanceOf(_alice, 1_000_000e6);
+
+        vm.expectEmit();
+        emit IERC20.Transfer(address(0), _alice, 1_000_000e6);
+
+        assertEq(_smartMToken.internalWrap(_alice, _alice, 1_000_000e6), 1_000_000e6);
+
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 955_000e6 + 909_090_909090);
+        assertEq(_smartMToken.balanceOf(_alice), 1_000_000e6 + 1_000_000e6);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 50499_999999);
+        assertEq(_smartMToken.totalNonEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 955_000e6 + 909_090_909090);
+        assertEq(_smartMToken.totalEarningSupply(), 1_000_000e6 + 1_000_000e6);
+        assertEq(_smartMToken.totalAccruedYield(), 50499_999999);
     }
 
     /* ============ wrap ============ */
@@ -198,40 +252,28 @@ contract SmartMTokenTests is Test {
     function testFuzz_wrap(
         bool earningEnabled_,
         bool accountEarning_,
+        uint240 balanceWithYield_,
         uint240 balance_,
         uint240 wrapAmount_,
-        uint128 accountIndex_,
-        uint128 currentIndex_
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
     ) external {
-        accountEarning_ = earningEnabled_ && accountEarning_;
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-            _smartMToken.enableEarning();
-        }
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        accountIndex_ = uint128(bound(accountIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
+        (balanceWithYield_, balance_) = _getFuzzedBalances(balanceWithYield_, balance_);
 
-        if (accountEarning_) {
-            _smartMToken.setAccountOf(_alice, balance_, accountIndex_, false, false);
-            _smartMToken.setTotalEarningSupply(balance_);
+        _setupAccount(_alice, accountEarning_, balanceWithYield_, balance_);
 
-            _smartMToken.setPrincipalOfTotalEarningSupply(
-                IndexingMath.getPrincipalAmountRoundedDown(balance_, accountIndex_)
-            );
-        } else {
-            _smartMToken.setAccountOf(_alice, balance_);
-            _smartMToken.setTotalNonEarningSupply(balance_);
-        }
+        wrapAmount_ = uint240(bound(wrapAmount_, 0, _getMaxAmount(_smartMToken.currentIndex()) - balanceWithYield_));
 
-        currentIndex_ = uint128(bound(currentIndex_, accountIndex_, 10 * _EXP_SCALED_ONE));
-        wrapAmount_ = uint240(bound(wrapAmount_, 0, _getMaxAmount(currentIndex_) - balance_));
-
-        _mToken.setCurrentIndex(_currentIndex = currentIndex_);
         _mToken.setBalanceOf(_alice, wrapAmount_);
-
-        uint240 accruedYield_ = _smartMToken.accruedYieldOf(_alice);
 
         if (wrapAmount_ == 0) {
             vm.expectRevert(abi.encodeWithSelector(IERC20Extended.InsufficientAmount.selector, (0)));
@@ -245,7 +287,7 @@ contract SmartMTokenTests is Test {
 
         if (wrapAmount_ == 0) return;
 
-        assertEq(_smartMToken.balanceOf(_alice), balance_ + accruedYield_ + wrapAmount_);
+        assertEq(_smartMToken.balanceOf(_alice), balance_ + wrapAmount_);
 
         assertEq(
             accountEarning_ ? _smartMToken.totalEarningSupply() : _smartMToken.totalNonEarningSupply(),
@@ -266,40 +308,28 @@ contract SmartMTokenTests is Test {
     function testFuzz_wrap_entireBalance(
         bool earningEnabled_,
         bool accountEarning_,
+        uint240 balanceWithYield_,
         uint240 balance_,
         uint240 wrapAmount_,
-        uint128 accountIndex_,
-        uint128 currentIndex_
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
     ) external {
-        accountEarning_ = earningEnabled_ && accountEarning_;
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-            _smartMToken.enableEarning();
-        }
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        accountIndex_ = uint128(bound(accountIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
+        (balanceWithYield_, balance_) = _getFuzzedBalances(balanceWithYield_, balance_);
 
-        if (accountEarning_) {
-            _smartMToken.setAccountOf(_alice, balance_, accountIndex_, false, false);
-            _smartMToken.setTotalEarningSupply(balance_);
+        _setupAccount(_alice, accountEarning_, balanceWithYield_, balance_);
 
-            _smartMToken.setPrincipalOfTotalEarningSupply(
-                IndexingMath.getPrincipalAmountRoundedDown(balance_, accountIndex_)
-            );
-        } else {
-            _smartMToken.setAccountOf(_alice, balance_);
-            _smartMToken.setTotalNonEarningSupply(balance_);
-        }
+        wrapAmount_ = uint240(bound(wrapAmount_, 0, _getMaxAmount(_smartMToken.currentIndex()) - balanceWithYield_));
 
-        currentIndex_ = uint128(bound(currentIndex_, accountIndex_, 10 * _EXP_SCALED_ONE));
-        wrapAmount_ = uint240(bound(wrapAmount_, 0, _getMaxAmount(currentIndex_) - balance_));
-
-        _mToken.setCurrentIndex(_currentIndex = currentIndex_);
         _mToken.setBalanceOf(_alice, wrapAmount_);
-
-        uint240 accruedYield_ = _smartMToken.accruedYieldOf(_alice);
 
         if (wrapAmount_ == 0) {
             vm.expectRevert(abi.encodeWithSelector(IERC20Extended.InsufficientAmount.selector, (0)));
@@ -313,7 +343,7 @@ contract SmartMTokenTests is Test {
 
         if (wrapAmount_ == 0) return;
 
-        assertEq(_smartMToken.balanceOf(_alice), balance_ + accruedYield_ + wrapAmount_);
+        assertEq(_smartMToken.balanceOf(_alice), balance_ + wrapAmount_);
 
         assertEq(
             accountEarning_ ? _smartMToken.totalEarningSupply() : _smartMToken.totalNonEarningSupply(),
@@ -332,40 +362,28 @@ contract SmartMTokenTests is Test {
     function testFuzz_wrapWithPermit_vrs(
         bool earningEnabled_,
         bool accountEarning_,
+        uint240 balanceWithYield_,
         uint240 balance_,
         uint240 wrapAmount_,
-        uint128 accountIndex_,
-        uint128 currentIndex_
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
     ) external {
-        accountEarning_ = earningEnabled_ && accountEarning_;
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-            _smartMToken.enableEarning();
-        }
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        accountIndex_ = uint128(bound(accountIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
+        (balanceWithYield_, balance_) = _getFuzzedBalances(balanceWithYield_, balance_);
 
-        if (accountEarning_) {
-            _smartMToken.setAccountOf(_alice, balance_, accountIndex_, false, false);
-            _smartMToken.setTotalEarningSupply(balance_);
+        _setupAccount(_alice, accountEarning_, balanceWithYield_, balance_);
 
-            _smartMToken.setPrincipalOfTotalEarningSupply(
-                IndexingMath.getPrincipalAmountRoundedDown(balance_, accountIndex_)
-            );
-        } else {
-            _smartMToken.setAccountOf(_alice, balance_);
-            _smartMToken.setTotalNonEarningSupply(balance_);
-        }
+        wrapAmount_ = uint240(bound(wrapAmount_, 0, _getMaxAmount(_smartMToken.currentIndex()) - balanceWithYield_));
 
-        currentIndex_ = uint128(bound(currentIndex_, accountIndex_, 10 * _EXP_SCALED_ONE));
-        wrapAmount_ = uint240(bound(wrapAmount_, 0, _getMaxAmount(currentIndex_) - balance_));
-
-        _mToken.setCurrentIndex(_currentIndex = currentIndex_);
         _mToken.setBalanceOf(_alice, wrapAmount_);
-
-        uint240 accruedYield_ = _smartMToken.accruedYieldOf(_alice);
 
         if (wrapAmount_ == 0) {
             vm.expectRevert(abi.encodeWithSelector(IERC20Extended.InsufficientAmount.selector, (0)));
@@ -379,7 +397,7 @@ contract SmartMTokenTests is Test {
 
         if (wrapAmount_ == 0) return;
 
-        assertEq(_smartMToken.balanceOf(_alice), balance_ + accruedYield_ + wrapAmount_);
+        assertEq(_smartMToken.balanceOf(_alice), balance_ + wrapAmount_);
 
         assertEq(
             accountEarning_ ? _smartMToken.totalEarningSupply() : _smartMToken.totalNonEarningSupply(),
@@ -398,40 +416,28 @@ contract SmartMTokenTests is Test {
     function testFuzz_wrapWithPermit_signature(
         bool earningEnabled_,
         bool accountEarning_,
+        uint240 balanceWithYield_,
         uint240 balance_,
         uint240 wrapAmount_,
-        uint128 accountIndex_,
-        uint128 currentIndex_
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
     ) external {
-        accountEarning_ = earningEnabled_ && accountEarning_;
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-            _smartMToken.enableEarning();
-        }
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        accountIndex_ = uint128(bound(accountIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
+        (balanceWithYield_, balance_) = _getFuzzedBalances(balanceWithYield_, balance_);
 
-        if (accountEarning_) {
-            _smartMToken.setAccountOf(_alice, balance_, accountIndex_, false, false);
-            _smartMToken.setTotalEarningSupply(balance_);
+        _setupAccount(_alice, accountEarning_, balanceWithYield_, balance_);
 
-            _smartMToken.setPrincipalOfTotalEarningSupply(
-                IndexingMath.getPrincipalAmountRoundedDown(balance_, accountIndex_)
-            );
-        } else {
-            _smartMToken.setAccountOf(_alice, balance_);
-            _smartMToken.setTotalNonEarningSupply(balance_);
-        }
+        wrapAmount_ = uint240(bound(wrapAmount_, 0, _getMaxAmount(_smartMToken.currentIndex()) - balanceWithYield_));
 
-        currentIndex_ = uint128(bound(currentIndex_, accountIndex_, 10 * _EXP_SCALED_ONE));
-        wrapAmount_ = uint240(bound(wrapAmount_, 0, _getMaxAmount(currentIndex_) - balance_));
-
-        _mToken.setCurrentIndex(_currentIndex = currentIndex_);
         _mToken.setBalanceOf(_alice, wrapAmount_);
-
-        uint240 accruedYield_ = _smartMToken.accruedYieldOf(_alice);
 
         if (wrapAmount_ == 0) {
             vm.expectRevert(abi.encodeWithSelector(IERC20Extended.InsufficientAmount.selector, (0)));
@@ -445,7 +451,7 @@ contract SmartMTokenTests is Test {
 
         if (wrapAmount_ == 0) return;
 
-        assertEq(_smartMToken.balanceOf(_alice), balance_ + accruedYield_ + wrapAmount_);
+        assertEq(_smartMToken.balanceOf(_alice), balance_ + wrapAmount_);
 
         assertEq(
             accountEarning_ ? _smartMToken.totalEarningSupply() : _smartMToken.totalNonEarningSupply(),
@@ -470,9 +476,10 @@ contract SmartMTokenTests is Test {
     function test_internalUnwrap_insufficientBalance_fromEarner() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
 
-        _smartMToken.setAccountOf(_alice, 999, _currentIndex, false, false);
+        _smartMToken.setAccountOf(_alice, 999, 999, false, false);
 
         vm.expectRevert(abi.encodeWithSelector(ISmartMToken.InsufficientBalance.selector, _alice, 999, 1_000));
         _smartMToken.internalUnwrap(_alice, _alice, 1_000);
@@ -493,7 +500,7 @@ contract SmartMTokenTests is Test {
         assertEq(_smartMToken.balanceOf(_alice), 500);
         assertEq(_smartMToken.totalNonEarningSupply(), 500);
         assertEq(_smartMToken.totalEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 0);
 
         vm.expectEmit();
         emit IERC20.Transfer(_alice, address(0), 500);
@@ -503,41 +510,76 @@ contract SmartMTokenTests is Test {
         assertEq(_smartMToken.balanceOf(_alice), 0);
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
         assertEq(_smartMToken.totalEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 0);
     }
 
-    function test_internalUnwrap_fromEarner() external {
+    function test_internalUnwrap_fromEarner_smallAmounts() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setPrincipalOfTotalEarningSupply(909);
         _smartMToken.setTotalEarningSupply(1_000);
+        _smartMToken.setPrincipalOfTotalEarningSupply(955);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _currentIndex, false, false);
+        _smartMToken.setAccountOf(_alice, 1_000, 955, false, false); // 1_050 balance with yield.
 
-        _mToken.setBalanceOf(address(_smartMToken), 1_000);
+        _mToken.setBalanceOf(address(_smartMToken), 1_050);
 
         vm.expectEmit();
         emit IERC20.Transfer(_alice, address(0), 1);
 
         assertEq(_smartMToken.internalUnwrap(_alice, _alice, 1), 0);
 
-        // Change due to principal round up on unwrap.
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
-        assertEq(_smartMToken.balanceOf(_alice), 999);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 955 - 1);
+        assertEq(_smartMToken.balanceOf(_alice), 1_000 - 1);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 50);
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
-        assertEq(_smartMToken.totalEarningSupply(), 999);
+        assertEq(_smartMToken.totalEarningPrincipal(), 955 - 1);
+        assertEq(_smartMToken.totalEarningSupply(), 1_000 - 1);
+        assertEq(_smartMToken.totalAccruedYield(), 50);
 
         vm.expectEmit();
         emit IERC20.Transfer(_alice, address(0), 999);
 
         assertEq(_smartMToken.internalUnwrap(_alice, _alice, 999), 998);
 
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
-        assertEq(_smartMToken.balanceOf(_alice), 0);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 955 - 1 - 909);
+        assertEq(_smartMToken.balanceOf(_alice), 1_000 - 1 - 999);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 49);
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
-        assertEq(_smartMToken.totalEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 955 - 1 - 909);
+        assertEq(_smartMToken.totalEarningSupply(), 1_000 - 1 - 999);
+        assertEq(_smartMToken.totalAccruedYield(), 49);
+    }
+
+    function test_internalUnwrap_fromEarner() external {
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
+        _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
+
+        _smartMToken.setTotalEarningSupply(1_000_000e6);
+        _smartMToken.setPrincipalOfTotalEarningSupply(955_000e6);
+
+        _smartMToken.setAccountOf(_alice, 1_000_000e6, 955_000e6, false, false); // 1_050_500e6 balance with yield.
+
+        _mToken.setBalanceOf(address(_smartMToken), 1_050_500e6);
+
+        vm.expectEmit();
+        emit IERC20.Transfer(_alice, address(0), 1_000_000e6);
+
+        assertEq(_smartMToken.internalUnwrap(_alice, _alice, 1_000_000e6), 999_999_999999);
+
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 955_000e6 - 909_090_909090 - 1);
+        assertEq(_smartMToken.balanceOf(_alice), 1_000_000e6 - 1_000_000e6);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 50499_999999);
+        assertEq(_smartMToken.totalNonEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 955_000e6 - 909_090_909090 - 1);
+        assertEq(_smartMToken.totalEarningSupply(), 1_000_000e6 - 1_000_000e6);
+        assertEq(_smartMToken.totalAccruedYield(), 50499_999999);
     }
 
     /* ============ unwrap ============ */
@@ -551,52 +593,36 @@ contract SmartMTokenTests is Test {
     function testFuzz_unwrap(
         bool earningEnabled_,
         bool accountEarning_,
+        uint240 balanceWithYield_,
         uint240 balance_,
         uint240 unwrapAmount_,
-        uint128 accountIndex_,
-        uint128 currentIndex_
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
     ) external {
-        accountEarning_ = earningEnabled_ && accountEarning_;
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-            _smartMToken.enableEarning();
-        }
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        accountIndex_ = uint128(bound(accountIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
+        (balanceWithYield_, balance_) = _getFuzzedBalances(balanceWithYield_, balance_);
 
-        if (accountEarning_) {
-            _smartMToken.setAccountOf(_alice, balance_, accountIndex_, false, false);
-            _smartMToken.setTotalEarningSupply(balance_);
+        _setupAccount(_alice, accountEarning_, balanceWithYield_, balance_);
 
-            _smartMToken.setPrincipalOfTotalEarningSupply(
-                IndexingMath.getPrincipalAmountRoundedDown(balance_, accountIndex_)
-            );
-        } else {
-            _smartMToken.setAccountOf(_alice, balance_);
-            _smartMToken.setTotalNonEarningSupply(balance_);
-        }
+        uint240 maxAmount_ = _getMaxAmount(_smartMToken.currentIndex());
+        maxAmount_ = maxAmount_ > 2 * balance_ ? 2 * balance_ : maxAmount_;
+        unwrapAmount_ = uint240(bound(unwrapAmount_, 0, maxAmount_));
 
-        currentIndex_ = uint128(bound(currentIndex_, accountIndex_, 10 * _EXP_SCALED_ONE));
-        unwrapAmount_ = uint240(bound(unwrapAmount_, 0, 2 * balance_));
-
-        _mToken.setCurrentIndex(_currentIndex = currentIndex_);
-
-        uint240 accruedYield_ = _smartMToken.accruedYieldOf(_alice);
-
-        _mToken.setBalanceOf(address(_smartMToken), balance_ + accruedYield_);
+        _mToken.setBalanceOf(address(_smartMToken), balanceWithYield_);
 
         if (unwrapAmount_ == 0) {
             vm.expectRevert(abi.encodeWithSelector(IERC20Extended.InsufficientAmount.selector, (0)));
-        } else if (unwrapAmount_ > balance_ + accruedYield_) {
+        } else if (unwrapAmount_ > balance_) {
             vm.expectRevert(
-                abi.encodeWithSelector(
-                    ISmartMToken.InsufficientBalance.selector,
-                    _alice,
-                    balance_ + accruedYield_,
-                    unwrapAmount_
-                )
+                abi.encodeWithSelector(ISmartMToken.InsufficientBalance.selector, _alice, balance_, unwrapAmount_)
             );
         } else {
             vm.expectEmit();
@@ -606,9 +632,9 @@ contract SmartMTokenTests is Test {
         vm.startPrank(_alice);
         _smartMToken.unwrap(_alice, unwrapAmount_);
 
-        if ((unwrapAmount_ == 0) || (unwrapAmount_ > balance_ + accruedYield_)) return;
+        if ((unwrapAmount_ == 0) || (unwrapAmount_ > balance_)) return;
 
-        assertEq(_smartMToken.balanceOf(_alice), balance_ + accruedYield_ - unwrapAmount_);
+        assertEq(_smartMToken.balanceOf(_alice), balance_ - unwrapAmount_);
 
         assertEq(
             accountEarning_ ? _smartMToken.totalEarningSupply() : _smartMToken.totalNonEarningSupply(),
@@ -620,51 +646,37 @@ contract SmartMTokenTests is Test {
     function testFuzz_unwrap_entireBalance(
         bool earningEnabled_,
         bool accountEarning_,
+        uint240 balanceWithYield_,
         uint240 balance_,
-        uint128 accountIndex_,
-        uint128 currentIndex_
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
     ) external {
-        accountEarning_ = earningEnabled_ && accountEarning_;
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-            _smartMToken.enableEarning();
-        }
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        accountIndex_ = uint128(bound(accountIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
+        (balanceWithYield_, balance_) = _getFuzzedBalances(balanceWithYield_, balance_);
 
-        if (accountEarning_) {
-            _smartMToken.setAccountOf(_alice, balance_, accountIndex_, false, false);
-            _smartMToken.setTotalEarningSupply(balance_);
+        _setupAccount(_alice, accountEarning_, balanceWithYield_, balance_);
 
-            _smartMToken.setPrincipalOfTotalEarningSupply(
-                IndexingMath.getPrincipalAmountRoundedDown(balance_, accountIndex_)
-            );
-        } else {
-            _smartMToken.setAccountOf(_alice, balance_);
-            _smartMToken.setTotalNonEarningSupply(balance_);
-        }
+        _mToken.setBalanceOf(address(_smartMToken), balanceWithYield_);
 
-        currentIndex_ = uint128(bound(currentIndex_, accountIndex_, 10 * _EXP_SCALED_ONE));
-
-        _mToken.setCurrentIndex(_currentIndex = currentIndex_);
-
-        uint240 accruedYield_ = _smartMToken.accruedYieldOf(_alice);
-
-        _mToken.setBalanceOf(address(_smartMToken), balance_ + accruedYield_);
-
-        if (balance_ + accruedYield_ == 0) {
+        if (balance_ == 0) {
             vm.expectRevert(abi.encodeWithSelector(IERC20Extended.InsufficientAmount.selector, (0)));
         } else {
             vm.expectEmit();
-            emit IERC20.Transfer(_alice, address(0), balance_ + accruedYield_);
+            emit IERC20.Transfer(_alice, address(0), balance_);
         }
 
         vm.startPrank(_alice);
         _smartMToken.unwrap(_alice);
 
-        if (balance_ + accruedYield_ == 0) return;
+        if (balance_ == 0) return;
 
         assertEq(_smartMToken.balanceOf(_alice), 0);
 
@@ -684,9 +696,14 @@ contract SmartMTokenTests is Test {
     function test_claimFor_earner() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _EXP_SCALED_ONE, false, false);
+        _smartMToken.setTotalEarningSupply(1_000);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
+
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, false, false); // 1_100 balance with yield.
 
         assertEq(_smartMToken.balanceOf(_alice), 1_000);
 
@@ -699,6 +716,10 @@ contract SmartMTokenTests is Test {
         assertEq(_smartMToken.claimFor(_alice), 100);
 
         assertEq(_smartMToken.balanceOf(_alice), 1_100);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 1_000);
+
+        assertEq(_smartMToken.totalEarningSupply(), 1_100);
+        assertEq(_smartMToken.totalEarningPrincipal(), 1_000);
     }
 
     function test_claimFor_earner_withOverrideRecipient() external {
@@ -709,9 +730,14 @@ contract SmartMTokenTests is Test {
             bytes32(uint256(uint160(_bob)))
         );
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _EXP_SCALED_ONE, false, false);
+        _smartMToken.setTotalEarningSupply(1_000);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
+
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, false, false); // 1_100 balance with yield.
 
         assertEq(_smartMToken.balanceOf(_alice), 1_000);
 
@@ -727,15 +753,25 @@ contract SmartMTokenTests is Test {
         assertEq(_smartMToken.claimFor(_alice), 100);
 
         assertEq(_smartMToken.balanceOf(_alice), 1_000);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 909);
         assertEq(_smartMToken.balanceOf(_bob), 100);
+
+        assertEq(_smartMToken.totalEarningSupply(), 1_000);
+        assertEq(_smartMToken.totalNonEarningSupply(), 100);
+        assertEq(_smartMToken.totalEarningPrincipal(), 909);
     }
 
     function test_claimFor_earner_withFee() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _EXP_SCALED_ONE, true, false);
+        _smartMToken.setTotalEarningSupply(1_000);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
+
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, true, false); // 1_100 balance with yield.
 
         _earnerManager.setEarnerDetails(_alice, true, 1_500, _bob);
 
@@ -753,15 +789,25 @@ contract SmartMTokenTests is Test {
         assertEq(_smartMToken.claimFor(_alice), 100);
 
         assertEq(_smartMToken.balanceOf(_alice), 1_085);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 986);
         assertEq(_smartMToken.balanceOf(_bob), 15);
+
+        assertEq(_smartMToken.totalEarningSupply(), 1_085);
+        assertEq(_smartMToken.totalNonEarningSupply(), 15);
+        assertEq(_smartMToken.totalEarningPrincipal(), 986);
     }
 
     function test_claimFor_earner_withFeeAboveOneHundredPercent() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _EXP_SCALED_ONE, true, false);
+        _smartMToken.setTotalEarningSupply(1_000);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
+
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, true, false); // 1_100 balance with yield.
 
         _earnerManager.setEarnerDetails(_alice, true, type(uint16).max, _bob);
 
@@ -779,7 +825,12 @@ contract SmartMTokenTests is Test {
         assertEq(_smartMToken.claimFor(_alice), 100);
 
         assertEq(_smartMToken.balanceOf(_alice), 1_000);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 909);
         assertEq(_smartMToken.balanceOf(_bob), 100);
+
+        assertEq(_smartMToken.totalEarningSupply(), 1_000);
+        assertEq(_smartMToken.totalNonEarningSupply(), 100);
+        assertEq(_smartMToken.totalEarningPrincipal(), 909);
     }
 
     function test_claimFor_earner_withOverrideRecipientAndFee() external {
@@ -790,9 +841,14 @@ contract SmartMTokenTests is Test {
             bytes32(uint256(uint160(_charlie)))
         );
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _EXP_SCALED_ONE, true, false);
+        _smartMToken.setTotalEarningSupply(1_000);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
+
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, true, false); // 1_100 balance with yield.
 
         _earnerManager.setEarnerDetails(_alice, true, 1_500, _bob);
 
@@ -813,22 +869,37 @@ contract SmartMTokenTests is Test {
         assertEq(_smartMToken.claimFor(_alice), 100);
 
         assertEq(_smartMToken.balanceOf(_alice), 1_000);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 908);
         assertEq(_smartMToken.balanceOf(_bob), 15);
         assertEq(_smartMToken.balanceOf(_charlie), 85);
+
+        assertEq(_smartMToken.totalEarningSupply(), 1_000);
+        assertEq(_smartMToken.totalNonEarningSupply(), 100);
+        assertEq(_smartMToken.totalEarningPrincipal(), 908);
     }
 
     function testFuzz_claimFor(
+        bool earningEnabled_,
+        bool accountEarning_,
+        uint240 balanceWithYield_,
         uint240 balance_,
-        uint128 accountIndex_,
-        uint128 index_,
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_,
         bool claimOverride_,
         uint16 feeRate_
     ) external {
-        accountIndex_ = uint128(bound(index_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
-        index_ = uint128(bound(index_, accountIndex_, 10 * _EXP_SCALED_ONE));
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
+
+        (balanceWithYield_, balance_) = _getFuzzedBalances(balanceWithYield_, balance_);
+
+        _setupAccount(_alice, accountEarning_, balanceWithYield_, balance_);
 
         if (claimOverride_) {
             _registrar.set(
@@ -837,17 +908,10 @@ contract SmartMTokenTests is Test {
             );
         }
 
-        _smartMToken.enableEarning();
-
-        _smartMToken.setTotalEarningSupply(balance_);
-
-        _smartMToken.setAccountOf(_alice, balance_, accountIndex_, feeRate_ != 0, false);
-
         if (feeRate_ != 0) {
+            _smartMToken.setHasEarnerDetails(_alice, true);
             _earnerManager.setEarnerDetails(_alice, true, feeRate_, _bob);
         }
-
-        _mToken.setCurrentIndex(index_);
 
         uint240 accruedYield_ = _smartMToken.accruedYieldOf(_alice);
 
@@ -880,28 +944,78 @@ contract SmartMTokenTests is Test {
         );
     }
 
+    /* ============ excess ============ */
+    function test_excess() external {
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
+        _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
+
+        assertEq(_smartMToken.excess(), 0);
+
+        _smartMToken.setTotalNonEarningSupply(1_000);
+        _smartMToken.setTotalEarningSupply(1_000);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
+
+        _mToken.setBalanceOf(address(_smartMToken), 2_100);
+
+        assertEq(_smartMToken.excess(), 0);
+
+        _mToken.setBalanceOf(address(_smartMToken), 2_101);
+
+        assertEq(_smartMToken.excess(), 0);
+
+        _mToken.setBalanceOf(address(_smartMToken), 2_102);
+
+        assertEq(_smartMToken.excess(), 1);
+
+        _mToken.setBalanceOf(address(_smartMToken), 3_102);
+
+        assertEq(_smartMToken.excess(), 1_001);
+
+        _mToken.setCurrentIndex(_currentMIndex = 1_331000000000);
+
+        assertEq(_smartMToken.excess(), 891);
+    }
+
     /* ============ claimExcess ============ */
     function testFuzz_claimExcess(
-        uint128 index_,
+        bool earningEnabled_,
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_,
         uint240 totalNonEarningSupply_,
-        uint112 principalOfTotalEarningSupply_,
+        uint112 projectedTotalEarningSupply_,
         uint240 mBalance_
     ) external {
-        index_ = uint128(bound(index_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        totalNonEarningSupply_ = uint240(bound(totalNonEarningSupply_, 0, _getMaxAmount(index_)));
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        uint240 totalEarningSupply_ = uint112(bound(principalOfTotalEarningSupply_, 0, _getMaxAmount(index_)));
+        uint128 currentIndex_ = _smartMToken.currentIndex();
+        uint240 maxAmount_ = _getMaxAmount(currentIndex_);
 
-        principalOfTotalEarningSupply_ = uint112(totalEarningSupply_ / index_);
+        totalNonEarningSupply_ = uint240(bound(totalNonEarningSupply_, 0, maxAmount_));
 
-        mBalance_ = uint240(bound(mBalance_, totalNonEarningSupply_ + totalEarningSupply_, type(uint240).max));
+        projectedTotalEarningSupply_ = uint112(
+            bound(projectedTotalEarningSupply_, 0, maxAmount_ - totalNonEarningSupply_)
+        );
+
+        uint112 totalEarningPrincipal_ = IndexingMath.getPrincipalAmountRoundedDown(
+            projectedTotalEarningSupply_,
+            currentIndex_
+        );
+
+        mBalance_ = uint240(bound(mBalance_, totalNonEarningSupply_, type(uint240).max));
 
         _mToken.setBalanceOf(address(_smartMToken), mBalance_);
         _smartMToken.setTotalNonEarningSupply(totalNonEarningSupply_);
-        _smartMToken.setPrincipalOfTotalEarningSupply(principalOfTotalEarningSupply_);
-
-        _mToken.setCurrentIndex(index_);
+        _smartMToken.setPrincipalOfTotalEarningSupply(totalEarningPrincipal_);
 
         uint240 expectedExcess_ = _smartMToken.excess();
 
@@ -927,6 +1041,14 @@ contract SmartMTokenTests is Test {
         _smartMToken.transfer(address(0), 1_000);
     }
 
+    function test_transfer_insufficientBalance_toSelf() external {
+        _smartMToken.setAccountOf(_alice, 999);
+
+        vm.expectRevert(abi.encodeWithSelector(ISmartMToken.InsufficientBalance.selector, _alice, 999, 1_000));
+        vm.prank(_alice);
+        _smartMToken.transfer(_alice, 1_000);
+    }
+
     function test_transfer_insufficientBalance_fromNonEarner_toNonEarner() external {
         _smartMToken.setAccountOf(_alice, 999);
 
@@ -938,9 +1060,11 @@ contract SmartMTokenTests is Test {
     function test_transfer_insufficientBalance_fromEarner_toNonEarner() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setAccountOf(_alice, 999, _currentIndex, false, false);
+        _smartMToken.setAccountOf(_alice, 999, 999, false, false);
 
         vm.expectRevert(abi.encodeWithSelector(ISmartMToken.InsufficientBalance.selector, _alice, 999, 1_000));
         vm.prank(_alice);
@@ -960,12 +1084,11 @@ contract SmartMTokenTests is Test {
         _smartMToken.transfer(_bob, 500);
 
         assertEq(_smartMToken.balanceOf(_alice), 500);
-
         assertEq(_smartMToken.balanceOf(_bob), 1_000);
 
         assertEq(_smartMToken.totalNonEarningSupply(), 1_500);
         assertEq(_smartMToken.totalEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 0);
     }
 
     function testFuzz_transfer_fromNonEarner_toNonEarner(
@@ -973,7 +1096,7 @@ contract SmartMTokenTests is Test {
         uint256 aliceBalance_,
         uint256 transferAmount_
     ) external {
-        supply_ = bound(supply_, 1, type(uint112).max);
+        supply_ = bound(supply_, 1, type(uint240).max);
         aliceBalance_ = bound(aliceBalance_, 1, supply_);
         transferAmount_ = bound(transferAmount_, 1, aliceBalance_);
         uint256 bobBalance = supply_ - aliceBalance_;
@@ -994,21 +1117,29 @@ contract SmartMTokenTests is Test {
 
         assertEq(_smartMToken.totalNonEarningSupply(), supply_);
         assertEq(_smartMToken.totalEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 0);
     }
 
     function test_transfer_fromEarner_toNonEarner() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setPrincipalOfTotalEarningSupply(909);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
         _smartMToken.setTotalEarningSupply(1_000);
 
         _smartMToken.setTotalNonEarningSupply(500);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _currentIndex, false, false);
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, false, false); // 1_100 balance with yield.
+
         _smartMToken.setAccountOf(_bob, 500);
+
+        assertEq(_smartMToken.balanceOf(_alice), 1_000);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 100);
+
+        assertEq(_smartMToken.balanceOf(_bob), 500);
 
         vm.expectEmit();
         emit IERC20.Transfer(_alice, _bob, 500);
@@ -1016,13 +1147,16 @@ contract SmartMTokenTests is Test {
         vm.prank(_alice);
         _smartMToken.transfer(_bob, 500);
 
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 545);
         assertEq(_smartMToken.balanceOf(_alice), 500);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 99);
 
         assertEq(_smartMToken.balanceOf(_bob), 1_000);
 
         assertEq(_smartMToken.totalNonEarningSupply(), 1_000);
+        assertEq(_smartMToken.totalEarningPrincipal(), 545);
         assertEq(_smartMToken.totalEarningSupply(), 500);
+        assertEq(_smartMToken.totalAccruedYield(), 99);
 
         vm.expectEmit();
         emit IERC20.Transfer(_alice, _bob, 1);
@@ -1030,27 +1164,38 @@ contract SmartMTokenTests is Test {
         vm.prank(_alice);
         _smartMToken.transfer(_bob, 1);
 
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 544);
         assertEq(_smartMToken.balanceOf(_alice), 499);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 99);
 
         assertEq(_smartMToken.balanceOf(_bob), 1_001);
 
         assertEq(_smartMToken.totalNonEarningSupply(), 1_001);
+        assertEq(_smartMToken.totalEarningPrincipal(), 544);
         assertEq(_smartMToken.totalEarningSupply(), 499);
+        assertEq(_smartMToken.totalAccruedYield(), 99);
     }
 
     function test_transfer_fromNonEarner_toEarner() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setPrincipalOfTotalEarningSupply(454);
+        _smartMToken.setPrincipalOfTotalEarningSupply(500);
         _smartMToken.setTotalEarningSupply(500);
 
         _smartMToken.setTotalNonEarningSupply(1_000);
 
         _smartMToken.setAccountOf(_alice, 1_000);
-        _smartMToken.setAccountOf(_bob, 500, _currentIndex, false, false);
+
+        _smartMToken.setAccountOf(_bob, 500, 500, false, false); // 550 balance with yield.
+
+        assertEq(_smartMToken.balanceOf(_alice), 1_000);
+
+        assertEq(_smartMToken.balanceOf(_bob), 500);
+        assertEq(_smartMToken.accruedYieldOf(_bob), 50);
 
         vm.expectEmit();
         emit IERC20.Transfer(_alice, _bob, 500);
@@ -1060,23 +1205,34 @@ contract SmartMTokenTests is Test {
 
         assertEq(_smartMToken.balanceOf(_alice), 500);
 
-        assertEq(_smartMToken.lastIndexOf(_bob), _currentIndex);
+        assertEq(_smartMToken.earningPrincipalOf(_bob), 954);
         assertEq(_smartMToken.balanceOf(_bob), 1_000);
+        assertEq(_smartMToken.accruedYieldOf(_bob), 49);
 
         assertEq(_smartMToken.totalNonEarningSupply(), 500);
+        assertEq(_smartMToken.totalEarningPrincipal(), 954);
         assertEq(_smartMToken.totalEarningSupply(), 1_000);
+        assertEq(_smartMToken.totalAccruedYield(), 49);
     }
 
     function test_transfer_fromEarner_toEarner() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setPrincipalOfTotalEarningSupply(1_363);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_500);
         _smartMToken.setTotalEarningSupply(1_500);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _currentIndex, false, false);
-        _smartMToken.setAccountOf(_bob, 500, _currentIndex, false, false);
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, false, false); // 1_100 balance with yield.
+        _smartMToken.setAccountOf(_bob, 500, 500, false, false); // 550 balance with yield.
+
+        assertEq(_smartMToken.balanceOf(_alice), 1_000);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 100);
+
+        assertEq(_smartMToken.balanceOf(_bob), 500);
+        assertEq(_smartMToken.accruedYieldOf(_bob), 50);
 
         vm.expectEmit();
         emit IERC20.Transfer(_alice, _bob, 500);
@@ -1084,14 +1240,18 @@ contract SmartMTokenTests is Test {
         vm.prank(_alice);
         _smartMToken.transfer(_bob, 500);
 
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 545);
         assertEq(_smartMToken.balanceOf(_alice), 500);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 99);
 
-        assertEq(_smartMToken.lastIndexOf(_bob), _currentIndex);
+        assertEq(_smartMToken.earningPrincipalOf(_bob), 954);
         assertEq(_smartMToken.balanceOf(_bob), 1_000);
+        assertEq(_smartMToken.accruedYieldOf(_bob), 49);
 
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 1499);
         assertEq(_smartMToken.totalEarningSupply(), 1_500);
+        assertEq(_smartMToken.totalAccruedYield(), 148);
     }
 
     function test_transfer_nonEarnerToSelf() external {
@@ -1109,23 +1269,25 @@ contract SmartMTokenTests is Test {
 
         assertEq(_smartMToken.totalNonEarningSupply(), 1_000);
         assertEq(_smartMToken.totalEarningSupply(), 0);
-        assertEq(_smartMToken.principalOfTotalEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 0);
     }
 
     function test_transfer_earnerToSelf() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setPrincipalOfTotalEarningSupply(909);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
         _smartMToken.setTotalEarningSupply(1_000);
 
-        _smartMToken.setAccountOf(_alice, 1_000, _currentIndex, false, false);
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, false, false); // 1_100 balance with yield.
 
-        _mToken.setCurrentIndex((_currentIndex * 5) / 3); // 1_833333447838
+        _mToken.setCurrentIndex(1_331000000000);
 
         assertEq(_smartMToken.balanceOf(_alice), 1_000);
-        assertEq(_smartMToken.accruedYieldOf(_alice), 666);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 210);
 
         vm.expectEmit();
         emit IERC20.Transfer(_alice, _alice, 500);
@@ -1133,80 +1295,54 @@ contract SmartMTokenTests is Test {
         vm.prank(_alice);
         _smartMToken.transfer(_alice, 500);
 
-        assertEq(_smartMToken.balanceOf(_alice), 1_666);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 1_000);
+        assertEq(_smartMToken.balanceOf(_alice), 1_000);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 210);
+
+        assertEq(_smartMToken.totalNonEarningSupply(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 1_000);
+        assertEq(_smartMToken.totalEarningSupply(), 1_000);
+        assertEq(_smartMToken.totalAccruedYield(), 210);
     }
 
     function testFuzz_transfer(
         bool earningEnabled_,
         bool aliceEarning_,
         bool bobEarning_,
+        uint240 aliceBalanceWithYield_,
         uint240 aliceBalance_,
+        uint240 bobBalanceWithYield_,
         uint240 bobBalance_,
-        uint128 aliceIndex_,
-        uint128 bobIndex_,
-        uint128 currentIndex_,
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_,
         uint240 amount_
     ) external {
-        aliceEarning_ = earningEnabled_ && aliceEarning_;
-        bobEarning_ = earningEnabled_ && bobEarning_;
-
-        if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-            _smartMToken.enableEarning();
-        }
-
-        aliceIndex_ = uint128(bound(aliceIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        aliceBalance_ = uint240(bound(aliceBalance_, 0, _getMaxAmount(aliceIndex_) / 4));
-
-        if (aliceEarning_) {
-            _smartMToken.setAccountOf(_alice, aliceBalance_, aliceIndex_, false, false);
-            _smartMToken.setTotalEarningSupply(aliceBalance_);
-
-            _smartMToken.setPrincipalOfTotalEarningSupply(
-                IndexingMath.getPrincipalAmountRoundedDown(aliceBalance_, aliceIndex_)
-            );
-        } else {
-            _smartMToken.setAccountOf(_alice, aliceBalance_);
-            _smartMToken.setTotalNonEarningSupply(aliceBalance_);
-        }
-
-        bobIndex_ = uint128(bound(bobIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        bobBalance_ = uint240(bound(bobBalance_, 0, _getMaxAmount(bobIndex_) / 4));
-
-        if (bobEarning_) {
-            _smartMToken.setAccountOf(_bob, bobBalance_, bobIndex_, false, false);
-            _smartMToken.setTotalEarningSupply(_smartMToken.totalEarningSupply() + bobBalance_);
-
-            _smartMToken.setPrincipalOfTotalEarningSupply(
-                IndexingMath.getPrincipalAmountRoundedDown(
-                    _smartMToken.totalEarningSupply() + bobBalance_,
-                    aliceIndex_ > bobIndex_ ? aliceIndex_ : bobIndex_
-                )
-            );
-        } else {
-            _smartMToken.setAccountOf(_bob, bobBalance_);
-            _smartMToken.setTotalNonEarningSupply(_smartMToken.totalNonEarningSupply() + bobBalance_);
-        }
-
-        currentIndex_ = uint128(
-            bound(currentIndex_, aliceIndex_ > bobIndex_ ? aliceIndex_ : bobIndex_, 10 * _EXP_SCALED_ONE)
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
         );
 
-        _mToken.setCurrentIndex(_currentIndex = currentIndex_);
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        uint240 aliceAccruedYield_ = _smartMToken.accruedYieldOf(_alice);
-        uint240 bobAccruedYield_ = _smartMToken.accruedYieldOf(_bob);
+        (aliceBalanceWithYield_, aliceBalance_) = _getFuzzedBalances(aliceBalanceWithYield_, aliceBalance_);
 
-        amount_ = uint240(bound(amount_, 0, aliceBalance_ + aliceAccruedYield_));
+        _setupAccount(_alice, aliceEarning_, aliceBalanceWithYield_, aliceBalance_);
 
-        if (amount_ > aliceBalance_ + aliceAccruedYield_) {
+        (bobBalanceWithYield_, bobBalance_) = _getFuzzedBalances(
+            bobBalanceWithYield_,
+            bobBalance_,
+            _getMaxAmount(_smartMToken.currentIndex()) - aliceBalanceWithYield_
+        );
+
+        _setupAccount(_bob, bobEarning_, bobBalanceWithYield_, bobBalance_);
+
+        amount_ = uint240(bound(amount_, 0, aliceBalance_));
+
+        if (amount_ > aliceBalance_) {
             vm.expectRevert(
-                abi.encodeWithSelector(
-                    ISmartMToken.InsufficientBalance.selector,
-                    _alice,
-                    aliceBalance_ + aliceAccruedYield_,
-                    amount_
-                )
+                abi.encodeWithSelector(ISmartMToken.InsufficientBalance.selector, _alice, aliceBalance_, amount_)
             );
         } else {
             vm.expectEmit();
@@ -1216,41 +1352,26 @@ contract SmartMTokenTests is Test {
         vm.prank(_alice);
         _smartMToken.transfer(_bob, amount_);
 
-        if (amount_ > aliceBalance_ + aliceAccruedYield_) return;
+        if (amount_ > aliceBalance_) return;
 
-        assertEq(_smartMToken.balanceOf(_alice), aliceBalance_ + aliceAccruedYield_ - amount_);
-        assertEq(_smartMToken.balanceOf(_bob), bobBalance_ + bobAccruedYield_ + amount_);
+        assertEq(_smartMToken.balanceOf(_alice), aliceBalance_ - amount_);
+        assertEq(_smartMToken.balanceOf(_bob), bobBalance_ + amount_);
 
         if (aliceEarning_ && bobEarning_) {
-            assertEq(
-                _smartMToken.totalEarningSupply(),
-                aliceBalance_ + aliceAccruedYield_ + bobBalance_ + bobAccruedYield_
-            );
+            assertEq(_smartMToken.totalEarningSupply(), aliceBalance_ + bobBalance_);
         } else if (aliceEarning_) {
-            assertEq(_smartMToken.totalEarningSupply(), aliceBalance_ + aliceAccruedYield_ - amount_);
-            assertEq(_smartMToken.totalNonEarningSupply(), bobBalance_ + bobAccruedYield_ + amount_);
+            assertEq(_smartMToken.totalEarningSupply(), aliceBalance_ - amount_);
+            assertEq(_smartMToken.totalNonEarningSupply(), bobBalance_ + amount_);
         } else if (bobEarning_) {
-            assertEq(_smartMToken.totalNonEarningSupply(), aliceBalance_ + aliceAccruedYield_ - amount_);
-            assertEq(_smartMToken.totalEarningSupply(), bobBalance_ + bobAccruedYield_ + amount_);
+            assertEq(_smartMToken.totalNonEarningSupply(), aliceBalance_ - amount_);
+            assertEq(_smartMToken.totalEarningSupply(), bobBalance_ + amount_);
         } else {
-            assertEq(
-                _smartMToken.totalNonEarningSupply(),
-                aliceBalance_ + aliceAccruedYield_ + bobBalance_ + bobAccruedYield_
-            );
+            assertEq(_smartMToken.totalNonEarningSupply(), aliceBalance_ + bobBalance_);
         }
     }
 
     /* ============ startEarningFor ============ */
-    function test_startEarningFor_earningIsDisabled() external {
-        vm.expectRevert(ISmartMToken.EarningIsDisabled.selector);
-        _smartMToken.startEarningFor(_alice);
-    }
-
     function test_startEarningFor_notApprovedEarner() external {
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-
-        _smartMToken.enableEarning();
-
         vm.expectRevert(abi.encodeWithSelector(ISmartMToken.NotApprovedEarner.selector, _alice));
         _smartMToken.startEarningFor(_alice);
     }
@@ -1258,11 +1379,11 @@ contract SmartMTokenTests is Test {
     function test_startEarning_overflow() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        uint256 aliceBalance_ = uint256(type(uint112).max) + 20;
-
-        _mToken.setCurrentIndex(_currentIndex = _EXP_SCALED_ONE);
+        uint256 aliceBalance_ = _getMaxAmount(1_100000000000) + 2;
 
         _smartMToken.setTotalNonEarningSupply(aliceBalance_);
 
@@ -1277,7 +1398,9 @@ contract SmartMTokenTests is Test {
     function test_startEarningFor() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
         _smartMToken.setTotalNonEarningSupply(1_000);
 
@@ -1291,20 +1414,31 @@ contract SmartMTokenTests is Test {
         _smartMToken.startEarningFor(_alice);
 
         assertEq(_smartMToken.isEarning(_alice), true);
-        assertEq(_smartMToken.lastIndexOf(_alice), _currentIndex);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 909);
         assertEq(_smartMToken.balanceOf(_alice), 1000);
 
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
-        assertEq(_smartMToken.totalEarningSupply(), 1_000);
+        assertEq(_smartMToken.totalEarningPrincipal(), 909);
     }
 
-    function testFuzz_startEarningFor(uint240 balance_, uint128 index_) external {
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(_currentIndex)));
-        index_ = uint128(bound(index_, _currentIndex, 10 * _EXP_SCALED_ONE));
+    function testFuzz_startEarningFor(
+        bool earningEnabled_,
+        uint240 balance_,
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
+    ) external {
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        _smartMToken.enableEarning();
+        uint128 currentIndex_ = _smartMToken.currentIndex();
+
+        balance_ = uint240(bound(balance_, 0, _getMaxAmount(currentIndex_)));
 
         _smartMToken.setTotalNonEarningSupply(balance_);
 
@@ -1312,32 +1446,25 @@ contract SmartMTokenTests is Test {
 
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
 
-        _mToken.setCurrentIndex(index_);
-
         vm.expectEmit();
         emit ISmartMToken.StartedEarning(_alice);
 
         _smartMToken.startEarningFor(_alice);
 
+        uint112 earningPrincipal_ = IndexingMath.getPrincipalAmountRoundedDown(balance_, currentIndex_);
+
         assertEq(_smartMToken.isEarning(_alice), true);
-        assertEq(_smartMToken.lastIndexOf(_alice), index_);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), earningPrincipal_);
         assertEq(_smartMToken.balanceOf(_alice), balance_);
 
         assertEq(_smartMToken.totalNonEarningSupply(), 0);
         assertEq(_smartMToken.totalEarningSupply(), balance_);
+        assertEq(_smartMToken.totalEarningPrincipal(), earningPrincipal_);
     }
 
     /* ============ startEarningFor batch ============ */
-    function test_startEarningFor_batch_earningIsDisabled() external {
-        vm.expectRevert(ISmartMToken.EarningIsDisabled.selector);
-        _smartMToken.startEarningFor(new address[](2));
-    }
-
     function test_startEarningFor_batch_notApprovedEarner() external {
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
-
-        _smartMToken.enableEarning();
 
         address[] memory accounts_ = new address[](2);
         accounts_[0] = _alice;
@@ -1348,11 +1475,8 @@ contract SmartMTokenTests is Test {
     }
 
     function test_startEarningFor_batch() external {
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
-
-        _smartMToken.enableEarning();
 
         address[] memory accounts_ = new address[](2);
         accounts_[0] = _alice;
@@ -1378,39 +1502,50 @@ contract SmartMTokenTests is Test {
     function test_stopEarningFor() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setPrincipalOfTotalEarningSupply(909);
+        _smartMToken.setPrincipalOfTotalEarningSupply(1_000);
         _smartMToken.setTotalEarningSupply(1_000);
 
-        _smartMToken.setAccountOf(_alice, 999, _currentIndex, false, false);
+        _smartMToken.setAccountOf(_alice, 1_000, 1_000, false, false); // 1_100 balance with yield.
 
         vm.expectEmit();
         emit ISmartMToken.StoppedEarning(_alice);
 
         _smartMToken.stopEarningFor(_alice);
 
-        assertEq(_smartMToken.balanceOf(_alice), 999);
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 0);
+        assertEq(_smartMToken.balanceOf(_alice), 1_100);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 0);
         assertEq(_smartMToken.isEarning(_alice), false);
 
-        assertEq(_smartMToken.totalNonEarningSupply(), 999);
-        assertEq(_smartMToken.totalEarningSupply(), 1);
+        assertEq(_smartMToken.totalNonEarningSupply(), 1_100);
+        assertEq(_smartMToken.totalEarningSupply(), 0);
+        assertEq(_smartMToken.totalAccruedYield(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 0);
     }
 
-    function testFuzz_stopEarningFor(uint240 balance_, uint128 accountIndex_, uint128 index_) external {
-        accountIndex_ = uint128(bound(index_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
-        balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
-        index_ = uint128(bound(index_, accountIndex_, 10 * _EXP_SCALED_ONE));
+    function testFuzz_stopEarningFor(
+        bool earningEnabled_,
+        uint240 balanceWithYield_,
+        uint240 balance_,
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
+    ) external {
+        (currentMIndex_, enableMIndex_, disableIndex_) = _getFuzzedIndices(
+            currentMIndex_,
+            enableMIndex_,
+            disableIndex_
+        );
 
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+        _setupIndexes(earningEnabled_, currentMIndex_, enableMIndex_, disableIndex_);
 
-        _smartMToken.enableEarning();
+        (balanceWithYield_, balance_) = _getFuzzedBalances(balanceWithYield_, balance_);
 
-        _smartMToken.setTotalEarningSupply(balance_);
-
-        _smartMToken.setAccountOf(_alice, balance_, accountIndex_, false, false);
-
-        _mToken.setCurrentIndex(index_);
+        _setupAccount(_alice, true, balanceWithYield_, balance_);
 
         uint240 accruedYield_ = _smartMToken.accruedYieldOf(_alice);
 
@@ -1419,11 +1554,15 @@ contract SmartMTokenTests is Test {
 
         _smartMToken.stopEarningFor(_alice);
 
+        assertEq(_smartMToken.earningPrincipalOf(_alice), 0);
         assertEq(_smartMToken.balanceOf(_alice), balance_ + accruedYield_);
+        assertEq(_smartMToken.accruedYieldOf(_alice), 0);
         assertEq(_smartMToken.isEarning(_alice), false);
 
         assertEq(_smartMToken.totalNonEarningSupply(), balance_ + accruedYield_);
         assertEq(_smartMToken.totalEarningSupply(), 0);
+        assertEq(_smartMToken.totalAccruedYield(), 0);
+        assertEq(_smartMToken.totalEarningPrincipal(), 0);
     }
 
     /* ============ setClaimRecipient ============ */
@@ -1471,12 +1610,8 @@ contract SmartMTokenTests is Test {
     }
 
     function test_stopEarningFor_batch() external {
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-
-        _smartMToken.enableEarning();
-
-        _smartMToken.setAccountOf(_alice, 0, _currentIndex, false, false);
-        _smartMToken.setAccountOf(_bob, 0, _currentIndex, false, false);
+        _smartMToken.setAccountOf(_alice, 0, 0, false, false);
+        _smartMToken.setAccountOf(_bob, 0, 0, false, false);
 
         address[] memory accounts_ = new address[](2);
         accounts_[0] = _alice;
@@ -1497,43 +1632,40 @@ contract SmartMTokenTests is Test {
         _smartMToken.enableEarning();
     }
 
-    function test_enableEarning_earningCannotBeReenabled() external {
+    function test_enableEarning_firstTime() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
+
+        vm.expectEmit();
+        emit ISmartMToken.EarningEnabled(_currentMIndex);
 
         _smartMToken.enableEarning();
 
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), false);
-
-        _smartMToken.disableEarning();
-
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-
-        vm.expectRevert(ISmartMToken.EarningCannotBeReenabled.selector);
-        _smartMToken.enableEarning();
+        assertEq(_smartMToken.disableIndex(), 0);
+        assertEq(_smartMToken.enableMIndex(), _currentMIndex);
+        assertEq(_smartMToken.currentIndex(), _EXP_SCALED_ONE);
     }
 
     function test_enableEarning() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _smartMToken.setDisableIndex(1_100000000000);
+
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
+
         vm.expectEmit();
-        emit ISmartMToken.EarningEnabled(_currentIndex);
+        emit ISmartMToken.EarningEnabled(_currentMIndex);
 
         _smartMToken.enableEarning();
+
+        assertEq(_smartMToken.disableIndex(), 1_100000000000);
+        assertEq(_smartMToken.enableMIndex(), _currentMIndex);
+        assertEq(_smartMToken.currentIndex(), 1_100000000000); // 1.21 / 1.10
     }
 
     /* ============ disableEarning ============ */
     function test_disableEarning_earningIsDisabled() external {
-        vm.expectRevert(ISmartMToken.EarningIsDisabled.selector);
-        _smartMToken.disableEarning();
-
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-
-        _smartMToken.enableEarning();
-
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), false);
-
-        _smartMToken.disableEarning();
-
         vm.expectRevert(ISmartMToken.EarningIsDisabled.selector);
         _smartMToken.disableEarning();
     }
@@ -1546,16 +1678,19 @@ contract SmartMTokenTests is Test {
     }
 
     function test_disableEarning() external {
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+        _smartMToken.setDisableIndex(1_100000000000);
+        _smartMToken.setEnableMIndex(1_210000000000);
 
-        _smartMToken.enableEarning();
-
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), false);
+        _mToken.setCurrentIndex(_currentMIndex = 1_331000000000);
 
         vm.expectEmit();
-        emit ISmartMToken.EarningDisabled(_currentIndex);
+        emit ISmartMToken.EarningDisabled(1_210000000000); // (1.10 * 1.331) / 1.21
 
         _smartMToken.disableEarning();
+
+        assertEq(_smartMToken.disableIndex(), 1_210000000000);
+        assertEq(_smartMToken.enableMIndex(), 0);
+        assertEq(_smartMToken.currentIndex(), 1_210000000000);
     }
 
     /* ============ balanceOf ============ */
@@ -1572,17 +1707,19 @@ contract SmartMTokenTests is Test {
     function test_balanceOf_earner() external {
         _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
+        _mToken.setCurrentIndex(_currentMIndex = 1_100000000000);
         _smartMToken.enableEarning();
+        _mToken.setCurrentIndex(_currentMIndex = 1_210000000000);
 
-        _smartMToken.setAccountOf(_alice, 500, _EXP_SCALED_ONE, false, false);
+        _smartMToken.setAccountOf(_alice, 500, 500, false, false);
+
+        assertEq(_smartMToken.balanceOf(_alice), 500);
+
+        _smartMToken.setEarningPrincipalOf(_alice, 1_000);
 
         assertEq(_smartMToken.balanceOf(_alice), 500);
 
         _smartMToken.setAccountOf(_alice, 1_000);
-
-        assertEq(_smartMToken.balanceOf(_alice), 1_000);
-
-        _smartMToken.setLastIndexOf(_alice, 2 * _EXP_SCALED_ONE);
 
         assertEq(_smartMToken.balanceOf(_alice), 1_000);
     }
@@ -1661,111 +1798,43 @@ contract SmartMTokenTests is Test {
 
     /* ============ currentIndex ============ */
     function test_currentIndex() external {
-        assertEq(_smartMToken.currentIndex(), 0);
+        assertEq(_smartMToken.currentIndex(), _EXP_SCALED_ONE);
 
-        _mToken.setCurrentIndex(2 * _EXP_SCALED_ONE);
+        _mToken.setCurrentIndex(1_331000000000);
 
-        assertEq(_smartMToken.currentIndex(), 0);
+        assertEq(_smartMToken.currentIndex(), _EXP_SCALED_ONE);
 
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+        _smartMToken.setDisableIndex(1_050000000000);
 
-        _smartMToken.enableEarning();
+        assertEq(_smartMToken.currentIndex(), 1_050000000000);
 
-        assertEq(_smartMToken.currentIndex(), 2 * _EXP_SCALED_ONE);
+        _smartMToken.setDisableIndex(1_100000000000);
 
-        _mToken.setCurrentIndex(3 * _EXP_SCALED_ONE);
+        assertEq(_smartMToken.currentIndex(), 1_100000000000);
 
-        assertEq(_smartMToken.currentIndex(), 3 * _EXP_SCALED_ONE);
+        _smartMToken.setEnableMIndex(1_100000000000);
 
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), false);
+        assertEq(_smartMToken.currentIndex(), 1_331000000000);
 
-        _smartMToken.disableEarning();
+        _smartMToken.setEnableMIndex(1_155000000000);
 
-        assertEq(_smartMToken.currentIndex(), 3 * _EXP_SCALED_ONE);
+        assertEq(_smartMToken.currentIndex(), 1_267619047619);
 
-        _mToken.setCurrentIndex(4 * _EXP_SCALED_ONE);
+        _smartMToken.setEnableMIndex(1_210000000000);
 
-        assertEq(_smartMToken.currentIndex(), 3 * _EXP_SCALED_ONE);
-    }
+        assertEq(_smartMToken.currentIndex(), 1_210000000000);
 
-    /* ============ misc ============ */
-    function testFuzz_wrap_transfer_unwrap(
-        bool aliceIsEarning_,
-        uint240 aliceWrap_,
-        bool bobIsEarning_,
-        uint240 bobWrap_,
-        uint240 transfer_,
-        uint128 index_
-    ) external {
-        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
-        _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
-        _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
+        _smartMToken.setEnableMIndex(1_270500000000);
 
-        _smartMToken.enableEarning();
+        assertEq(_smartMToken.currentIndex(), 1_152380952380);
 
-        _mToken.setCurrentIndex(index_ = uint128(bound(index_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE)));
+        _smartMToken.setEnableMIndex(1_331000000000);
 
-        aliceWrap_ = uint240(bound(aliceWrap_, 0, _getMaxAmount(index_) / 3));
-        bobWrap_ = uint240(bound(bobWrap_, 0, _getMaxAmount(index_) / 3));
+        assertEq(_smartMToken.currentIndex(), 1_100000000000);
 
-        _mToken.setBalanceOf(_alice, aliceWrap_);
-        _mToken.setBalanceOf(_bob, bobWrap_);
+        _mToken.setCurrentIndex(1_464100000000);
 
-        if (aliceIsEarning_) {
-            _smartMToken.startEarningFor(_alice);
-        }
-
-        if (aliceWrap_ != 0) {
-            vm.prank(_alice);
-            _smartMToken.wrap(_alice, aliceWrap_);
-        }
-
-        _mToken.setCurrentIndex(index_ = uint128(bound(index_, index_, 10 * _EXP_SCALED_ONE)));
-
-        if (bobIsEarning_) {
-            _smartMToken.startEarningFor(_bob);
-        }
-
-        if (bobWrap_ != 0) {
-            vm.prank(_bob);
-            _smartMToken.wrap(_bob, bobWrap_);
-        }
-
-        _mToken.setCurrentIndex(index_ = uint128(bound(index_, index_, 10 * _EXP_SCALED_ONE)));
-
-        uint240 aliceYield_ = _smartMToken.accruedYieldOf(_alice);
-        uint240 bobYield_ = _smartMToken.accruedYieldOf(_bob);
-
-        transfer_ = uint240(bound(transfer_, 0, _smartMToken.balanceWithYieldOf(_alice)));
-
-        _mToken.setCurrentIndex(index_ = uint128(bound(index_, index_, 10 * _EXP_SCALED_ONE)));
-
-        aliceYield_ += _smartMToken.accruedYieldOf(_alice);
-
-        if (_smartMToken.balanceWithYieldOf(_alice) != 0) {
-            vm.prank(_alice);
-            _smartMToken.unwrap(_charlie);
-        }
-
-        _mToken.setCurrentIndex(index_ = uint128(bound(index_, index_, 10 * _EXP_SCALED_ONE)));
-
-        bobYield_ += _smartMToken.accruedYieldOf(_bob);
-
-        if (_smartMToken.balanceWithYieldOf(_bob) != 0) {
-            vm.prank(_bob);
-            _smartMToken.unwrap(_charlie);
-        }
-
-        assertEq(_smartMToken.totalEarningSupply(), 0);
-        assertEq(_smartMToken.totalNonEarningSupply(), 0);
-
-        uint240 total_ = aliceWrap_ + aliceYield_ + bobWrap_ + bobYield_;
-
-        if (total_ < 100e6) {
-            assertApproxEqAbs(_mToken.balanceOf(_charlie), total_, 100);
-        } else {
-            assertApproxEqRel(_mToken.balanceOf(_charlie), total_, 1e12);
-        }
+        assertEq(_smartMToken.currentIndex(), 1_210000000000);
     }
 
     /* ============ utils ============ */
@@ -1779,5 +1848,78 @@ contract SmartMTokenTests is Test {
 
     function _getMaxAmount(uint128 index_) internal pure returns (uint240 maxAmount_) {
         return (uint240(type(uint112).max) * index_) / _EXP_SCALED_ONE;
+    }
+
+    function _getFuzzedIndices(
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
+    ) internal pure returns (uint128, uint128, uint128) {
+        currentMIndex_ = uint128(bound(currentMIndex_, _EXP_SCALED_ONE, 10 * _EXP_SCALED_ONE));
+        enableMIndex_ = uint128(bound(enableMIndex_, _EXP_SCALED_ONE, currentMIndex_));
+
+        disableIndex_ = uint128(
+            bound(disableIndex_, _EXP_SCALED_ONE, (currentMIndex_ * _EXP_SCALED_ONE) / enableMIndex_)
+        );
+
+        return (currentMIndex_, enableMIndex_, disableIndex_);
+    }
+
+    function _setupIndexes(
+        bool earningEnabled_,
+        uint128 currentMIndex_,
+        uint128 enableMIndex_,
+        uint128 disableIndex_
+    ) internal {
+        _mToken.setCurrentIndex(currentMIndex_);
+        _smartMToken.setDisableIndex(disableIndex_);
+
+        if (earningEnabled_) {
+            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
+            _smartMToken.setEnableMIndex(enableMIndex_);
+        }
+    }
+
+    function _getFuzzedBalances(uint240 balanceWithYield_, uint240 balance_) internal view returns (uint240, uint240) {
+        uint128 currentIndex_ = _smartMToken.currentIndex();
+
+        balanceWithYield_ = uint240(bound(balanceWithYield_, 0, _getMaxAmount(currentIndex_)));
+        balance_ = uint240(bound(balance_, (balanceWithYield_ * _EXP_SCALED_ONE) / currentIndex_, balanceWithYield_));
+
+        return (balanceWithYield_, balance_);
+    }
+
+    function _getFuzzedBalances(
+        uint240 balanceWithYield_,
+        uint240 balance_,
+        uint240 maxAmount_
+    ) internal view returns (uint240, uint240) {
+        uint128 currentIndex_ = _smartMToken.currentIndex();
+
+        balanceWithYield_ = uint240(bound(balanceWithYield_, 0, maxAmount_));
+        balance_ = uint240(bound(balance_, (balanceWithYield_ * _EXP_SCALED_ONE) / currentIndex_, balanceWithYield_));
+
+        return (balanceWithYield_, balance_);
+    }
+
+    function _setupAccount(
+        address account_,
+        bool accountEarning_,
+        uint240 balanceWithYield_,
+        uint240 balance_
+    ) internal {
+        if (accountEarning_) {
+            uint112 principal_ = IndexingMath.getPrincipalAmountRoundedDown(
+                balanceWithYield_,
+                _smartMToken.currentIndex()
+            );
+
+            _smartMToken.setAccountOf(account_, balance_, principal_, false, false);
+            _smartMToken.setTotalEarningSupply(_smartMToken.totalEarningSupply() + balance_);
+            _smartMToken.setPrincipalOfTotalEarningSupply(_smartMToken.totalEarningPrincipal() + principal_);
+        } else {
+            _smartMToken.setAccountOf(account_, balance_);
+            _smartMToken.setTotalNonEarningSupply(_smartMToken.totalNonEarningSupply() + balance_);
+        }
     }
 }

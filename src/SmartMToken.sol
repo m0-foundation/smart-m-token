@@ -37,7 +37,8 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
      * @dev   Struct to represent an account's balance and yield earning details
      * @param isEarning         Whether the account is actively earning yield.
      * @param balance           The present amount of tokens held by the account.
-     * @param lastIndex         The index of the last interaction for the account (0 for non-earning accounts).
+     * @param version           The version of the Account struct.
+     * @param earningPrincipal  The earning principal for the account (0 for non-earning accounts).
      * @param hasEarnerDetails  Whether the account has additional details for earning yield.
      * @param hasClaimRecipient Whether the account has an explicitly set claim recipient.
      */
@@ -45,8 +46,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         // First Slot
         bool isEarning;
         uint240 balance;
+        uint8 version;
         // Second slot
-        uint128 lastIndex;
+        uint112 earningPrincipal;
         bool hasEarnerDetails;
         bool hasClaimRecipient;
     }
@@ -66,7 +68,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     bytes32 public constant CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX = "wm_claim_override_recipient";
 
     /// @inheritdoc ISmartMToken
-    bytes32 public constant MIGRATOR_KEY_PREFIX = "wm_migrator_v2";
+    bytes32 public constant MIGRATOR_KEY_PREFIX = "wm_migrator_v3";
 
     /// @inheritdoc ISmartMToken
     address public immutable earnerManager;
@@ -84,7 +86,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     address public immutable excessDestination;
 
     /// @inheritdoc ISmartMToken
-    uint112 public principalOfTotalEarningSupply;
+    uint112 public totalEarningPrincipal;
 
     /// @inheritdoc ISmartMToken
     uint240 public totalEarningSupply;
@@ -95,8 +97,11 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     /// @dev Mapping of accounts to their respective `AccountInfo` structs.
     mapping(address account => Account balance) internal _accounts;
 
-    /// @dev Array of indices at which earning was enabled or disabled.
-    uint128[] internal _enableDisableEarningIndices;
+    /// @inheritdoc ISmartMToken
+    uint128 public enableMIndex;
+
+    /// @inheritdoc ISmartMToken
+    uint128 public disableIndex;
 
     mapping(address account => address claimRecipient) internal _claimRecipients;
 
@@ -170,7 +175,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /// @inheritdoc ISmartMToken
     function unwrap(address recipient_) external returns (uint240 unwrapped_) {
-        return _unwrap(msg.sender, recipient_, uint240(balanceWithYieldOf(msg.sender)));
+        return _unwrap(msg.sender, recipient_, uint240(balanceOf(msg.sender)));
     }
 
     /// @inheritdoc ISmartMToken
@@ -190,17 +195,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         if (!_isThisApprovedEarner()) revert NotApprovedEarner(address(this));
         if (isEarningEnabled()) revert EarningIsEnabled();
 
-        // NOTE: This is a temporary measure to prevent re-enabling earning after it has been disabled.
-        //       This line will be removed in the future.
-        if (wasEarningEnabled()) revert EarningCannotBeReenabled();
-
-        uint128 currentMIndex_ = _currentMIndex();
-
-        _enableDisableEarningIndices.push(currentMIndex_);
+        emit EarningEnabled(enableMIndex = _currentMIndex());
 
         IMTokenLike(mToken).startEarning();
-
-        emit EarningEnabled(currentMIndex_);
     }
 
     /// @inheritdoc ISmartMToken
@@ -208,28 +205,21 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         if (_isThisApprovedEarner()) revert IsApprovedEarner(address(this));
         if (!isEarningEnabled()) revert EarningIsDisabled();
 
-        uint128 currentMIndex_ = _currentMIndex();
+        emit EarningDisabled(disableIndex = currentIndex());
 
-        _enableDisableEarningIndices.push(currentMIndex_);
+        delete enableMIndex;
 
         IMTokenLike(mToken).stopEarning();
-
-        emit EarningDisabled(currentMIndex_);
     }
 
     /// @inheritdoc ISmartMToken
     function startEarningFor(address account_) external {
-        if (!isEarningEnabled()) revert EarningIsDisabled();
-
-        // NOTE: Use `currentIndex()` if/when upgrading to support `startEarningFor` while earning is disabled.
-        _startEarningFor(account_, _currentMIndex());
+        _startEarningFor(account_, currentIndex());
     }
 
     /// @inheritdoc ISmartMToken
     function startEarningFor(address[] calldata accounts_) external {
-        if (!isEarningEnabled()) revert EarningIsDisabled();
-
-        uint128 currentIndex_ = _currentMIndex();
+        uint128 currentIndex_ = currentIndex();
 
         for (uint256 index_; index_ < accounts_.length; ++index_) {
             _startEarningFor(accounts_[index_], currentIndex_);
@@ -273,7 +263,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         Account storage accountInfo_ = _accounts[account_];
 
         return
-            accountInfo_.isEarning ? _getAccruedYield(accountInfo_.balance, accountInfo_.lastIndex, currentIndex()) : 0;
+            accountInfo_.isEarning
+                ? _getAccruedYield(accountInfo_.balance, accountInfo_.earningPrincipal, currentIndex())
+                : 0;
     }
 
     /// @inheritdoc IERC20
@@ -282,13 +274,13 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     }
 
     /// @inheritdoc ISmartMToken
-    function balanceWithYieldOf(address account_) public view returns (uint256 balance_) {
+    function balanceWithYieldOf(address account_) external view returns (uint256 balance_) {
         return balanceOf(account_) + accruedYieldOf(account_);
     }
 
     /// @inheritdoc ISmartMToken
-    function lastIndexOf(address account_) public view returns (uint128 lastIndex_) {
-        return _accounts[account_].lastIndex;
+    function earningPrincipalOf(address account_) public view returns (uint112 earningPrincipal_) {
+        return _accounts[account_].earningPrincipal;
     }
 
     /// @inheritdoc ISmartMToken
@@ -309,7 +301,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /// @inheritdoc ISmartMToken
     function currentIndex() public view returns (uint128 index_) {
-        return isEarningEnabled() ? _currentMIndex() : _lastDisableEarningIndex();
+        uint128 disableIndex_ = disableIndex == 0 ? IndexingMath.EXP_SCALED_ONE : disableIndex;
+
+        return enableMIndex == 0 ? disableIndex_ : (disableIndex_ * _currentMIndex()) / enableMIndex;
     }
 
     /// @inheritdoc ISmartMToken
@@ -319,12 +313,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /// @inheritdoc ISmartMToken
     function isEarningEnabled() public view returns (bool isEnabled_) {
-        return _enableDisableEarningIndices.length % 2 == 1;
-    }
-
-    /// @inheritdoc ISmartMToken
-    function wasEarningEnabled() public view returns (bool wasEarning_) {
-        return _enableDisableEarningIndices.length != 0;
+        return enableMIndex != 0;
     }
 
     /// @inheritdoc ISmartMToken
@@ -350,7 +339,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /// @inheritdoc IERC20
     function totalSupply() external view returns (uint256 totalSupply_) {
-        return totalEarningSupply + totalNonEarningSupply;
+        unchecked {
+            return totalEarningSupply + totalNonEarningSupply;
+        }
     }
 
     /* ============ Internal Interactive Functions ============ */
@@ -364,16 +355,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         _revertIfInsufficientAmount(amount_);
         _revertIfZeroAccount(recipient_);
 
-        if (_accounts[recipient_].isEarning) {
-            uint128 currentIndex_ = currentIndex();
-
-            _claim(recipient_, currentIndex_);
-
-            // NOTE: Additional principal may end up being rounded to 0 and this will not `_revertIfInsufficientAmount`.
-            _addEarningAmount(recipient_, amount_, currentIndex_);
-        } else {
-            _addNonEarningAmount(recipient_, amount_);
-        }
+        _accounts[recipient_].isEarning
+            ? _addEarningAmount(recipient_, amount_, currentIndex())
+            : _addNonEarningAmount(recipient_, amount_);
 
         emit Transfer(address(0), recipient_, amount_);
     }
@@ -386,16 +370,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     function _burn(address account_, uint240 amount_) internal {
         _revertIfInsufficientAmount(amount_);
 
-        if (_accounts[account_].isEarning) {
-            uint128 currentIndex_ = currentIndex();
-
-            _claim(account_, currentIndex_);
-
-            // NOTE: Subtracted principal may end up being rounded to 0 and this will not `_revertIfInsufficientAmount`.
-            _subtractEarningAmount(account_, amount_, currentIndex_);
-        } else {
-            _subtractNonEarningAmount(account_, amount_);
-        }
+        _accounts[account_].isEarning
+            ? _subtractEarningAmount(account_, amount_, currentIndex())
+            : _subtractNonEarningAmount(account_, amount_);
 
         emit Transfer(account_, address(0), amount_);
     }
@@ -419,49 +396,61 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
      * @param amount_  The present amount of tokens to decrement by.
      */
     function _subtractNonEarningAmount(address account_, uint240 amount_) internal {
+        Account storage accountInfo_ = _accounts[account_];
+
+        uint240 balance_ = accountInfo_.balance;
+
+        if (balance_ < amount_) revert InsufficientBalance(account_, balance_, amount_);
+
         unchecked {
-            Account storage accountInfo_ = _accounts[account_];
-
-            uint240 balance_ = accountInfo_.balance;
-
-            if (balance_ < amount_) revert InsufficientBalance(account_, balance_, amount_);
-
             accountInfo_.balance = balance_ - amount_;
             totalNonEarningSupply -= amount_;
         }
     }
 
     /**
-     * @dev   Increments the token balance of `account_` by `amount_`, assuming earning status and updated index.
+     * @dev   Increments the token balance of `account_` by `amount_`, assuming earning status.
      * @param account_      The address whose account balance will be incremented.
      * @param amount_       The present amount of tokens to increment by.
      * @param currentIndex_ The current index to use to compute the principal amount.
      */
     function _addEarningAmount(address account_, uint240 amount_, uint128 currentIndex_) internal {
+        Account storage accountInfo_ = _accounts[account_];
+        uint112 principal_ = IndexingMath.getPrincipalAmountRoundedDown(amount_, currentIndex_);
+
         // NOTE: Can be `unchecked` because the max amount of wrappable M is never greater than `type(uint240).max`.
         unchecked {
-            _accounts[account_].balance += amount_;
-            _addTotalEarningSupply(amount_, currentIndex_);
+            accountInfo_.balance += amount_;
+            accountInfo_.earningPrincipal = UIntMath.safe112(uint256(accountInfo_.earningPrincipal) + principal_);
         }
+
+        _addTotalEarningSupply(amount_, principal_);
     }
 
     /**
-     * @dev   Decrements the token balance of `account_` by `amount_`, assuming earning status and updated index.
+     * @dev   Decrements the token balance of `account_` by `amount_`, assuming earning status.
      * @param account_      The address whose account balance will be decremented.
      * @param amount_       The present amount of tokens to decrement by.
      * @param currentIndex_ The current index to use to compute the principal amount.
      */
     function _subtractEarningAmount(address account_, uint240 amount_, uint128 currentIndex_) internal {
+        Account storage accountInfo_ = _accounts[account_];
+        uint240 balance_ = accountInfo_.balance;
+        uint112 earningPrincipal_ = accountInfo_.earningPrincipal;
+
+        uint112 principal_ = UIntMath.min112(
+            IndexingMath.getPrincipalAmountRoundedUp(amount_, currentIndex_),
+            earningPrincipal_
+        );
+
+        if (balance_ < amount_) revert InsufficientBalance(account_, balance_, amount_);
+
         unchecked {
-            Account storage accountInfo_ = _accounts[account_];
-
-            uint240 balance_ = accountInfo_.balance;
-
-            if (balance_ < amount_) revert InsufficientBalance(account_, balance_, amount_);
-
             accountInfo_.balance = balance_ - amount_;
-            _subtractTotalEarningSupply(amount_, currentIndex_);
+            accountInfo_.earningPrincipal = earningPrincipal_ - principal_;
         }
+
+        _subtractTotalEarningSupply(amount_, principal_);
     }
 
     /**
@@ -475,22 +464,15 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
         if (!accountInfo_.isEarning) return 0;
 
-        uint128 index_ = accountInfo_.lastIndex;
-
-        if (currentIndex_ == index_) return 0;
-
         uint240 startingBalance_ = accountInfo_.balance;
 
-        yield_ = _getAccruedYield(startingBalance_, index_, currentIndex_);
-
-        accountInfo_.lastIndex = currentIndex_;
+        yield_ = _getAccruedYield(startingBalance_, accountInfo_.earningPrincipal, currentIndex_);
 
         if (yield_ == 0) return 0;
 
         unchecked {
+            // Update balance and total earning supply to account for the yield, but the principals have not changed.
             accountInfo_.balance = startingBalance_ + yield_;
-
-            // Update the total earning supply to account for the yield, but the principal has not changed.
             totalEarningSupply += yield_;
         }
 
@@ -537,6 +519,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
         if (feeRate_ == 0) return 0;
 
+        // TODO: Inline `UIntMath.min16` in unchecked line once it's implemented.
         feeRate_ = feeRate_ > HUNDRED_PERCENT ? HUNDRED_PERCENT : feeRate_; // Ensure fee rate is capped at 100%.
 
         unchecked {
@@ -559,38 +542,25 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         _revertIfZeroAccount(sender_);
         _revertIfZeroAccount(recipient_);
 
-        // Claims for both the sender and recipient are required before transferring since add an subtract functions
-        // assume accounts' balances are up-to-date with the current index.
-        _claim(sender_, currentIndex_);
-        _claim(recipient_, currentIndex_);
-
         emit Transfer(sender_, recipient_, amount_);
 
         if (amount_ == 0) return;
 
-        Account storage senderAccountInfo_ = _accounts[sender_];
-        Account storage recipientAccountInfo_ = _accounts[recipient_];
+        if (sender_ == recipient_) {
+            uint240 balance_ = _accounts[sender_].balance;
 
-        // If the sender and recipient are both earning or both non-earning, update their balances without affecting
-        // the total earning and non-earning supply storage variables.
-        if (senderAccountInfo_.isEarning == recipientAccountInfo_.isEarning) {
-            uint240 senderBalance_ = senderAccountInfo_.balance;
-
-            if (senderBalance_ < amount_) revert InsufficientBalance(sender_, senderBalance_, amount_);
-
-            unchecked {
-                senderAccountInfo_.balance = senderBalance_ - amount_;
-                recipientAccountInfo_.balance += amount_;
-            }
+            if (balance_ < amount_) revert InsufficientBalance(sender_, balance_, amount_);
 
             return;
         }
 
-        senderAccountInfo_.isEarning
+        // TODO: Don't touch globals if both ae earning or not earning.
+
+        _accounts[sender_].isEarning
             ? _subtractEarningAmount(sender_, amount_, currentIndex_)
             : _subtractNonEarningAmount(sender_, amount_);
 
-        recipientAccountInfo_.isEarning
+        _accounts[recipient_].isEarning
             ? _addEarningAmount(recipient_, amount_, currentIndex_)
             : _addNonEarningAmount(recipient_, amount_);
     }
@@ -607,38 +577,29 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /**
      * @dev   Increments total earning supply by `amount_` tokens.
-     * @param amount_       The present amount of tokens to increment total earning supply by.
-     * @param currentIndex_ The current index used to compute the principal amount.
+     * @param amount_    The present amount of tokens to increment total earning supply by.
+     * @param principal_ The principal amount of tokens to increment total earning principal by.
      */
-    function _addTotalEarningSupply(uint240 amount_, uint128 currentIndex_) internal {
+    function _addTotalEarningSupply(uint240 amount_, uint112 principal_) internal {
         unchecked {
             // Increment the total earning supply and principal proportionally.
             totalEarningSupply += amount_;
-            principalOfTotalEarningSupply += IndexingMath.getPrincipalAmountRoundedUp(amount_, currentIndex_);
+            totalEarningPrincipal = UIntMath.safe112(uint256(totalEarningPrincipal) + principal_);
         }
     }
 
     /**
      * @dev   Decrements total earning supply by `amount_` tokens.
-     * @param amount_       The present amount of tokens to decrement total earning supply by.
-     * @param currentIndex_ The current index used to compute the principal amount.
+     * @param amount_    The present amount of tokens to decrement total earning supply by.
+     * @param principal_ The principal amount of tokens to decrement total earning principal by.
      */
-    function _subtractTotalEarningSupply(uint240 amount_, uint128 currentIndex_) internal {
-        if (amount_ >= totalEarningSupply) {
-            delete totalEarningSupply;
-            delete principalOfTotalEarningSupply;
-
-            return;
-        }
+    function _subtractTotalEarningSupply(uint240 amount_, uint112 principal_) internal {
+        uint240 totalEarningSupply_ = totalEarningSupply;
+        uint112 totalEarningPrincipal_ = totalEarningPrincipal;
 
         unchecked {
-            uint112 principal_ = IndexingMath.getPrincipalAmountRoundedDown(amount_, currentIndex_);
-
-            principalOfTotalEarningSupply -= (
-                principal_ > principalOfTotalEarningSupply ? principalOfTotalEarningSupply : principal_
-            );
-
-            totalEarningSupply -= amount_;
+            totalEarningSupply = totalEarningSupply_ - UIntMath.min240(amount_, totalEarningSupply_);
+            totalEarningPrincipal = totalEarningPrincipal_ - UIntMath.min112(principal_, totalEarningPrincipal_);
         }
     }
 
@@ -698,13 +659,14 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
         if (accountInfo_.isEarning) return;
 
+        uint240 balance_ = accountInfo_.balance;
+        uint112 earningPrincipal_ = IndexingMath.getPrincipalAmountRoundedDown(balance_, currentIndex_);
+
         accountInfo_.isEarning = true;
-        accountInfo_.lastIndex = currentIndex_;
+        accountInfo_.earningPrincipal = earningPrincipal_;
         accountInfo_.hasEarnerDetails = admin_ != address(0); // Has earner details if an admin exists for this account.
 
-        uint240 balance_ = accountInfo_.balance;
-
-        _addTotalEarningSupply(balance_, currentIndex_);
+        _addTotalEarningSupply(balance_, earningPrincipal_);
 
         unchecked {
             totalNonEarningSupply -= balance_;
@@ -729,13 +691,14 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
         if (!accountInfo_.isEarning) return;
 
+        uint240 balance_ = accountInfo_.balance;
+        uint112 earningPrincipal_ = accountInfo_.earningPrincipal;
+
         delete accountInfo_.isEarning;
-        delete accountInfo_.lastIndex;
+        delete accountInfo_.earningPrincipal;
         delete accountInfo_.hasEarnerDetails;
 
-        uint240 balance_ = accountInfo_.balance;
-
-        _subtractTotalEarningSupply(balance_, currentIndex_);
+        _subtractTotalEarningSupply(balance_, earningPrincipal_);
 
         unchecked {
             totalNonEarningSupply += balance_;
@@ -758,27 +721,19 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
             IRegistrarLike(registrar).listContains(EARNERS_LIST_NAME, address(this));
     }
 
-    /// @dev Returns the earning index from the last `disableEarning` call.
-    function _lastDisableEarningIndex() internal view returns (uint128 index_) {
-        return wasEarningEnabled() ? _unsafeAccess(_enableDisableEarningIndices, 1) : 0;
-    }
-
     /**
-     * @dev    Compute the yield given an account's balance, last index, and the current index.
-     * @param  balance_      The token balance of an earning account.
-     * @param  lastIndex_    The index of ast interaction for the account.
-     * @param  currentIndex_ The current index.
-     * @return yield_        The yield accrued since the last interaction.
+     * @dev    Compute the yield given an account's balance, earning principal, and the current index.
+     * @param  balance_          The token balance of an earning account.
+     * @param  earningPrincipal_ The index of ast interaction for the account.
+     * @param  currentIndex_     The current index.
+     * @return yield_            The yield accrued since the last interaction.
      */
     function _getAccruedYield(
         uint240 balance_,
-        uint128 lastIndex_,
+        uint112 earningPrincipal_,
         uint128 currentIndex_
     ) internal pure returns (uint240 yield_) {
-        uint240 balanceWithYield_ = IndexingMath.getPresentAmountRoundedDown(
-            IndexingMath.getPrincipalAmountRoundedDown(balance_, lastIndex_),
-            currentIndex_
-        );
+        uint240 balanceWithYield_ = IndexingMath.getPresentAmountRoundedDown(earningPrincipal_, currentIndex_);
 
         unchecked {
             return (balanceWithYield_ <= balance_) ? 0 : balanceWithYield_ - balance_;
@@ -819,7 +774,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
      * @return supply_       The projected total earning supply.
      */
     function _projectedEarningSupply(uint128 currentIndex_) internal view returns (uint240 supply_) {
-        return IndexingMath.getPresentAmountRoundedDown(principalOfTotalEarningSupply, currentIndex_);
+        return IndexingMath.getPresentAmountRoundedDown(totalEarningPrincipal, currentIndex_);
     }
 
     /**

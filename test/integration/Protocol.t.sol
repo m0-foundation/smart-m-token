@@ -41,7 +41,7 @@ contract ProtocolIntegrationTests is TestBase {
         assertEq(_smartMToken.EARNERS_LIST_IGNORED_KEY(), "earners_list_ignored");
         assertEq(_smartMToken.EARNERS_LIST_NAME(), "earners");
         assertEq(_smartMToken.CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX(), "wm_claim_override_recipient");
-        assertEq(_smartMToken.MIGRATOR_KEY_PREFIX(), "wm_migrator_v2");
+        assertEq(_smartMToken.MIGRATOR_KEY_PREFIX(), "wm_migrator_v3");
         assertEq(_smartMToken.name(), "Smart M by M^0");
         assertEq(_smartMToken.symbol(), "MSMART");
         assertEq(_smartMToken.decimals(), 6);

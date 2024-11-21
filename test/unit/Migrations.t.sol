@@ -40,7 +40,7 @@ contract Migrator {
 contract MigrationTests is Test {
     uint56 internal constant _EXP_SCALED_ONE = 1e12;
 
-    bytes32 internal constant _WM_MIGRATOR_KEY_PREFIX = "wm_migrator_v2";
+    bytes32 internal constant _WM_MIGRATOR_KEY_PREFIX = "wm_migrator_v3";
     bytes32 internal constant _EM_MIGRATOR_KEY_PREFIX = "em_migrator_v1";
 
     address internal _alice = makeAddr("alice");

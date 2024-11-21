@@ -29,13 +29,13 @@ interface ISmartMToken is IMigratable, IERC20Extended {
 
     /**
      * @notice Emitted when Smart M earning is enabled.
-     * @param  index The index at the moment earning is enabled.
+     * @param  index The MToken index at the moment earning is enabled.
      */
     event EarningEnabled(uint128 index);
 
     /**
      * @notice Emitted when Smart M earning is disabled.
-     * @param  index The index at the moment earning is disabled.
+     * @param  index The SmartM index at the moment earning is disabled.
      */
     event EarningDisabled(uint128 index);
 
@@ -64,9 +64,6 @@ interface ISmartMToken is IMigratable, IERC20Extended {
 
     /// @notice Emitted when performing an operation that is not allowed when earning is enabled.
     error EarningIsEnabled();
-
-    /// @notice Emitted when trying to enable earning after it has been explicitly disabled.
-    error EarningCannotBeReenabled();
 
     /**
      * @notice Emitted when calling `mToken.stopEarning` for an account approved as an earner.
@@ -264,11 +261,11 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     function balanceWithYieldOf(address account) external view returns (uint256 balance);
 
     /**
-     * @notice Returns the last index of `account`.
-     * @param  account   The address of some account.
-     * @return lastIndex The last index of `account`, 0 if the account is not earning.
+     * @notice Returns the earning principal of `account`.
+     * @param  account          The address of some account.
+     * @return earningPrincipal The earning principal of `account`.
      */
-    function lastIndexOf(address account) external view returns (uint128 lastIndex);
+    function earningPrincipalOf(address account) external view returns (uint112 earningPrincipal);
 
     /**
      * @notice Returns the recipient to override as the destination for an account's claim of yield.
@@ -280,8 +277,14 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     /// @notice The current index of Smart M's earning mechanism.
     function currentIndex() external view returns (uint128 index);
 
+    /// @notice The M token's index when earning was most recently enabled.
+    function enableMIndex() external view returns (uint128 enableMIndex);
+
     /// @notice This contract's current excess M that is not earmarked for account balances or accrued yield.
     function excess() external view returns (uint240 excess);
+
+    /// @notice The wrapper's index when earning was most recently disabled.
+    function disableIndex() external view returns (uint128 disableIndex);
 
     /**
      * @notice Returns whether `account` is a wM earner.
@@ -292,9 +295,6 @@ interface ISmartMToken is IMigratable, IERC20Extended {
 
     /// @notice Whether Smart M earning is enabled.
     function isEarningEnabled() external view returns (bool isEnabled);
-
-    /// @notice Whether Smart M earning has been enabled at least once.
-    function wasEarningEnabled() external view returns (bool wasEnabled);
 
     /// @notice The account that can bypass the Registrar and call the `migrate(address migrator)` function.
     function migrationAdmin() external view returns (address migrationAdmin);
@@ -317,8 +317,8 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     /// @notice The portion of total supply that is earning yield.
     function totalEarningSupply() external view returns (uint240 totalSupply);
 
-    /// @notice The principal of totalEarningSupply to help compute totalAccruedYield(), and thus excess().
-    function principalOfTotalEarningSupply() external view returns (uint112 principalOfTotalEarningSupply);
+    /// @notice The total earning principal to help compute totalAccruedYield(), and thus excess().
+    function totalEarningPrincipal() external view returns (uint112 totalEarningPrincipal);
 
     /// @notice The address of the destination where excess is claimed to.
     function excessDestination() external view returns (address excessDestination);
