@@ -9,7 +9,7 @@ import { IEarnerManager } from "../../src/interfaces/IEarnerManager.sol";
 import { MockRegistrar } from "./../utils/Mocks.sol";
 import { EarnerManagerHarness } from "../utils/EarnerManagerHarness.sol";
 
-contract EarnerStatusManagerTests is Test {
+contract EarnerManagerTests is Test {
     bytes32 internal constant _EARNERS_LIST_IGNORED_KEY = "earners_list_ignored";
     bytes32 internal constant _EARNERS_LIST_NAME = "earners";
     bytes32 internal constant _ADMINS_LIST_NAME = "em_admins";

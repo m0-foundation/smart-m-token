@@ -6,6 +6,7 @@ import { Migratable } from "../lib/common/src/Migratable.sol";
 
 import { IEarnerManager } from "./interfaces/IEarnerManager.sol";
 import { IRegistrarLike } from "./interfaces/IRegistrarLike.sol";
+import { IWorldIDRouterLike } from "./interfaces/IWorldIDRouterLike.sol";
 
 /**
  * @title  Earner Manager allows admins to define earners without governance, and take fees from yield.
@@ -37,13 +38,22 @@ contract EarnerManager is IEarnerManager, Migratable {
     bytes32 public constant MIGRATOR_KEY_PREFIX = "em_migrator_v1";
 
     /// @inheritdoc IEarnerManager
+    uint256 public constant WORLD_ID_APPROVE_EARNING_EXTERNAL_NULLIFIER_HASH = 0x0; // TODO: Set to hash of `app_id` and `action`.
+
+    /// @inheritdoc IEarnerManager
     address public immutable registrar;
 
     /// @inheritdoc IEarnerManager
     address public immutable migrationAdmin;
 
+    /// @inheritdoc IEarnerManager
+    address public immutable worldIDRouter;
+
     /// @dev Mapping of account to earner details.
     mapping(address account => EarnerDetails earnerDetails) internal _earnerDetails;
+
+    /// @inheritdoc IEarnerManager
+    mapping(uint256 nullifierHash => bool isUsed) public isNullifierHashUsed;
 
     /* ============ Modifiers ============ */
 
@@ -59,12 +69,46 @@ contract EarnerManager is IEarnerManager, Migratable {
      * @param registrar_      The address of a Registrar contract.
      * @param migrationAdmin_ The address of a migration admin.
      */
-    constructor(address registrar_, address migrationAdmin_) {
+    constructor(address registrar_, address worldIDRouter_, address migrationAdmin_) {
         if ((registrar = registrar_) == address(0)) revert ZeroRegistrar();
+        if ((worldIDRouter = worldIDRouter_) == address(0)) revert ZeroWorldIDRouter();
         if ((migrationAdmin = migrationAdmin_) == address(0)) revert ZeroMigrationAdmin();
     }
 
     /* ============ Interactive Functions ============ */
+
+    /// @inheritdoc IEarnerManager
+    function approveEarning(address account_, bytes calldata authorizationData_) external {
+        (
+            uint256 root_,
+            uint256 groupId_,
+            uint256 signalHash_,
+            uint256 nullifierHash_,
+            uint256 externalNullifierHash_,
+            uint256[8] memory proof_
+        ) = abi.decode(authorizationData_, (uint256, uint256, uint256, uint256, uint256, uint256[8]));
+
+        if (externalNullifierHash_ != WORLD_ID_APPROVE_EARNING_EXTERNAL_NULLIFIER_HASH) {
+            revert InvalidAuthorizationData();
+        }
+
+        if (uint256(keccak256(abi.encode(account_))) != signalHash_) revert InvalidAuthorizationData();
+
+        if (isNullifierHashUsed[nullifierHash_]) revert InvalidAuthorizationData();
+
+        isNullifierHashUsed[nullifierHash_] = true;
+
+        IWorldIDRouterLike(worldIDRouter).verifyProof(
+            root_,
+            groupId_,
+            signalHash_,
+            nullifierHash_,
+            externalNullifierHash_,
+            proof_
+        );
+
+        _setDetails(account_, true, 0);
+    }
 
     /// @inheritdoc IEarnerManager
     function setEarnerDetails(address account_, bool status_, uint16 feeRate_) external onlyAdmin {

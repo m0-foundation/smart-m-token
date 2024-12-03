@@ -35,10 +35,11 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /**
      * @dev   Struct to represent an account's balance and yield earning details
-     * @param isEarning        Whether the account is actively earning yield.
-     * @param balance          The present amount of tokens held by the account.
-     * @param lastIndex        The index of the last interaction for the account (0 for non-earning accounts).
-     * @param hasEarnerDetails Whether the account has additional details for earning yield.
+     * @param isEarning         Whether the account is actively earning yield.
+     * @param balance           The present amount of tokens held by the account.
+     * @param lastIndex         The index of the last interaction for the account (0 for non-earning accounts).
+     * @param hasEarnerDetails  Whether the account has additional details for earning yield.
+     * @param hasClaimRecipient Whether the account has an explicitly set claim recipient.
      */
     struct Account {
         // First Slot
@@ -217,7 +218,14 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     }
 
     /// @inheritdoc ISmartMToken
-    function startEarningFor(address account_) external {
+    function startEarningFor(bytes calldata data_) external {
+        IEarnerManager(earnerManager).approveEarning(msg.sender, data_);
+
+        startEarningFor(msg.sender);
+    }
+
+    /// @inheritdoc ISmartMToken
+    function startEarningFor(address account_) public {
         if (!isEarningEnabled()) revert EarningIsDisabled();
 
         // NOTE: Use `currentIndex()` if/when upgrading to support `startEarningFor` while earning is disabled.
