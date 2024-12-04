@@ -106,6 +106,33 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     /// @notice Emitted in constructor if Registrar is 0x0.
     error ZeroRegistrar();
 
+    /// @notice Emitted in constructor if World ID Router is 0x0.
+    error ZeroWorldIDRouter();
+
+    /// @notice Emitted if the external nullifier hash (scope) of a semaphore proof is invalid.
+    error InvalidExternalNullifierHash();
+
+    /// @notice Emitted if the semaphore signal is invalid in the context it is being used.
+    error UnauthorizedSignal();
+
+    /// @notice Emitted if the semaphore nullifier is not associated to an account.
+    error NullifierNotFound();
+
+    /// @notice Emitted performing an invalid action for an account that has an associated semaphore nullifier.
+    error HasAssociatedNullifier();
+
+    /// @notice Emitted when trying to start earning for a second account using the same semaphore identity.
+    error NullifierAlreadyUsed();
+
+    /// @notice Emitted when trying to stop earning for an account using the incorrect semaphore identity.
+    error NullifierMismatch();
+
+    /**
+     * @notice Emitted when trying to start earning for an account that has already started earning.
+     * @param  account The account that has already started earning.
+     */
+    error AlreadyEarning(address account);
+
     /* ============ Interactive Functions ============ */
 
     /**
@@ -173,7 +200,34 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     function unwrap(address recipient) external returns (uint240 unwrapped);
 
     /**
-     * @notice Claims any claimable yield for `account`.
+     * @notice Claims any claimable yield for the account associated with the nullifier, to `destination`.
+     * @param  destination           The account to send the yield to.
+     * @param  root                  The merkle root of the semaphore group.
+     * @param  groupId               The identifier of the World group.
+     * @param  signalHash            The semaphore signal authorizing this action.
+     * @param  nullifierHash         The semaphore nullifier unique to a semaphore identity within this scope.
+     * @param  externalNullifierHash The semaphore nullifier unique to this scope.
+     * @return yield                 The amount of yield claimed.
+     */
+    function claimWithProof(
+        address destination,
+        uint256 root,
+        uint256 groupId,
+        uint256 signalHash,
+        uint256 nullifierHash,
+        uint256 externalNullifierHash,
+        uint256[8] calldata proof
+    ) external returns (uint240 yield);
+
+    /**
+     * @notice Claims any claimable yield for the caller to `destination`, if there is no associated nullifier.
+     * @param  destination The account to send the yield to.
+     * @return yield       The amount of yield claimed.
+     */
+    function claim(address destination) external returns (uint240 yield);
+
+    /**
+     * @notice Claims any claimable yield for `account` to a set claim recipient, if there is no associated nullifier.
      * @param  account The account under which yield was generated.
      * @return yield   The amount of yield claimed.
      */
@@ -192,6 +246,23 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     function disableEarning() external;
 
     /**
+     * @notice Starts earning for the caller if a valid proof is provided by a verified World ID identity.
+     * @param  root                  The merkle root of the semaphore group.
+     * @param  groupId               The identifier of the World group.
+     * @param  signalHash            The semaphore signal authorizing this action.
+     * @param  nullifierHash         The semaphore nullifier unique to a semaphore identity within this scope.
+     * @param  externalNullifierHash The semaphore nullifier unique to this scope.
+     */
+    function startEarningWithProof(
+        uint256 root,
+        uint256 groupId,
+        uint256 signalHash,
+        uint256 nullifierHash,
+        uint256 externalNullifierHash,
+        uint256[8] calldata proof
+    ) external;
+
+    /**
      * @notice Starts earning for `account` if allowed by the Earner Manager.
      * @param  account The account to start earning for.
      */
@@ -202,6 +273,33 @@ interface ISmartMToken is IMigratable, IERC20Extended {
      * @param  accounts The accounts to start earning for.
      */
     function startEarningFor(address[] calldata accounts) external;
+
+    /**
+     * @notice Stops earning for `account` if a valid proof is provided by the associated verified World ID identity.
+     * @param  root                  The merkle root of the semaphore group.
+     * @param  groupId               The identifier of the World group.
+     * @param  signalHash            The semaphore signal authorizing this action.
+     * @param  nullifierHash         The semaphore nullifier unique to a semaphore identity within this scope.
+     * @param  externalNullifierHash The semaphore nullifier unique to this scope.
+     */
+    function stopEarningWithProof(
+        address account,
+        uint256 root,
+        uint256 groupId,
+        uint256 signalHash,
+        uint256 nullifierHash,
+        uint256 externalNullifierHash,
+        uint256[8] calldata proof
+    ) external;
+
+    /**
+     * @notice Stops earning for the caller by disassociating the verified World ID identity.
+     * @param  nullifierHash The semaphore nullifier unique to a semaphore identity within this scope.
+     */
+    function stopEarning(uint256 nullifierHash) external;
+
+    /// @notice Stops earning for the caller.
+    function stopEarning() external;
 
     /**
      * @notice Stops earning for `account` if disallowed by the Earner Manager.
@@ -246,6 +344,18 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     /// @notice Registrar key prefix to determine the migrator contract.
     function MIGRATOR_KEY_PREFIX() external pure returns (bytes32 migratorKeyPrefix);
 
+    /// @notice Prefix to validate semaphore signal to start earning.
+    function START_EARNING_SIGNAL_PREFIX() external pure returns (bytes32 startEarningSignalPrefix);
+
+    /// @notice Prefix to validate semaphore signal to stop earning.
+    function STOP_EARNING_SIGNAL_PREFIX() external pure returns (bytes32 stopEarningSignalPrefix);
+
+    /// @notice Prefix to validate semaphore signal to claim yield.
+    function CLAIM_SIGNAL_PREFIX() external pure returns (bytes32 claimSignalPrefix);
+
+    /// @notice Hash to validate semaphore scope.
+    function EXTERNAL_NULLIFIER_HASH() external pure returns (uint256 externalNullifierHash);
+
     /**
      * @notice Returns the yield accrued for `account`, which is claimable.
      * @param  account The account being queried.
@@ -287,6 +397,14 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     function disableIndex() external view returns (uint128 disableIndex);
 
     /**
+     * @notice Returns the account and nonce associated with a nullifier hash.
+     * @param  nullifierHash The semaphore nullifier unique to a semaphore identity within this scope.
+     * @return account       The account associated with the nullifier hash.
+     * @return nonce         The next expected signal nonce for this nullifier hash.
+     */
+    function getNullifier(uint256 nullifierHash) external view returns (address account, uint96 nonce);
+
+    /**
      * @notice Returns whether `account` is a wM earner.
      * @param  account   The account being queried.
      * @return isEarning true if the account has started earning.
@@ -322,4 +440,7 @@ interface ISmartMToken is IMigratable, IERC20Extended {
 
     /// @notice The address of the destination where excess is claimed to.
     function excessDestination() external view returns (address excessDestination);
+
+    /// @notice The address of the World ID Router to verify semaphore proofs with.
+    function worldIDRouter() external view returns (address worldIDRouter);
 }
