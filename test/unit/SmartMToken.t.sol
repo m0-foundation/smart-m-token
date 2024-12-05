@@ -25,7 +25,7 @@ contract SmartMTokenTests is Test {
     uint56 internal constant _ONE_HUNDRED_PERCENT = 10_000;
     bytes32 internal constant _CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX = "wm_claim_override_recipient";
 
-    bytes32 internal constant _EARNERS_LIST = "earners";
+    bytes32 internal constant _EARNERS_LIST_NAME = "earners";
 
     address internal _alice = makeAddr("alice");
     address internal _bob = makeAddr("bob");
@@ -144,7 +144,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_internalWrap_toEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -206,7 +206,7 @@ contract SmartMTokenTests is Test {
         accountEarning_ = earningEnabled_ && accountEarning_;
 
         if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
             _smartMToken.enableEarning();
         }
 
@@ -274,7 +274,7 @@ contract SmartMTokenTests is Test {
         accountEarning_ = earningEnabled_ && accountEarning_;
 
         if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
             _smartMToken.enableEarning();
         }
 
@@ -340,7 +340,7 @@ contract SmartMTokenTests is Test {
         accountEarning_ = earningEnabled_ && accountEarning_;
 
         if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
             _smartMToken.enableEarning();
         }
 
@@ -406,7 +406,7 @@ contract SmartMTokenTests is Test {
         accountEarning_ = earningEnabled_ && accountEarning_;
 
         if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
             _smartMToken.enableEarning();
         }
 
@@ -468,7 +468,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_internalUnwrap_insufficientBalance_fromEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -507,7 +507,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_internalUnwrap_fromEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -559,7 +559,7 @@ contract SmartMTokenTests is Test {
         accountEarning_ = earningEnabled_ && accountEarning_;
 
         if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
             _smartMToken.enableEarning();
         }
 
@@ -627,7 +627,7 @@ contract SmartMTokenTests is Test {
         accountEarning_ = earningEnabled_ && accountEarning_;
 
         if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
             _smartMToken.enableEarning();
         }
 
@@ -682,7 +682,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_claimFor_earner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -702,7 +702,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_claimFor_earner_withOverrideRecipient() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _registrar.set(
             keccak256(abi.encode(_CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX, _alice)),
@@ -731,7 +731,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_claimFor_earner_withFee() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -757,7 +757,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_claimFor_earner_withFeeAboveOneHundredPercent() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -783,7 +783,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_claimFor_earner_withOverrideRecipientAndFee() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _registrar.set(
             keccak256(abi.encode(_CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX, _alice)),
@@ -828,7 +828,7 @@ contract SmartMTokenTests is Test {
         balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
         index_ = uint128(bound(index_, accountIndex_, 10 * _EXP_SCALED_ONE));
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         if (claimOverride_) {
             _registrar.set(
@@ -936,7 +936,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_transfer_insufficientBalance_fromEarner_toNonEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -998,7 +998,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_transfer_fromEarner_toNonEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1040,7 +1040,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_transfer_fromNonEarner_toEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1068,7 +1068,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_transfer_fromEarner_toEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1113,7 +1113,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_transfer_earnerToSelf() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1151,7 +1151,7 @@ contract SmartMTokenTests is Test {
         bobEarning_ = earningEnabled_ && bobEarning_;
 
         if (earningEnabled_) {
-            _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+            _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
             _smartMToken.enableEarning();
         }
 
@@ -1247,7 +1247,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_startEarningFor_notApprovedEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1256,7 +1256,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_startEarning_overflow() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1275,7 +1275,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_startEarningFor() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1302,7 +1302,7 @@ contract SmartMTokenTests is Test {
         balance_ = uint240(bound(balance_, 0, _getMaxAmount(_currentIndex)));
         index_ = uint128(bound(index_, _currentIndex, 10 * _EXP_SCALED_ONE));
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1334,7 +1334,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_startEarningFor_batch_notApprovedEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
 
         _smartMToken.enableEarning();
@@ -1348,7 +1348,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_startEarningFor_batch() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
 
@@ -1376,7 +1376,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_stopEarningFor() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1402,7 +1402,7 @@ contract SmartMTokenTests is Test {
         balance_ = uint240(bound(balance_, 0, _getMaxAmount(accountIndex_)));
         index_ = uint128(bound(index_, accountIndex_, 10 * _EXP_SCALED_ONE));
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1471,7 +1471,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_stopEarningFor_batch() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1498,22 +1498,22 @@ contract SmartMTokenTests is Test {
     }
 
     function test_enableEarning_earningCannotBeReenabled() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), false);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), false);
 
         _smartMToken.disableEarning();
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         vm.expectRevert(ISmartMToken.EarningCannotBeReenabled.selector);
         _smartMToken.enableEarning();
     }
 
     function test_enableEarning() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         vm.expectEmit();
         emit ISmartMToken.EarningEnabled(_currentIndex);
@@ -1526,11 +1526,11 @@ contract SmartMTokenTests is Test {
         vm.expectRevert(ISmartMToken.EarningIsDisabled.selector);
         _smartMToken.disableEarning();
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), false);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), false);
 
         _smartMToken.disableEarning();
 
@@ -1539,18 +1539,18 @@ contract SmartMTokenTests is Test {
     }
 
     function test_disableEarning_approvedEarner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         vm.expectRevert(abi.encodeWithSelector(ISmartMToken.IsApprovedEarner.selector, address(_smartMToken)));
         _smartMToken.disableEarning();
     }
 
     function test_disableEarning() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), false);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), false);
 
         vm.expectEmit();
         emit ISmartMToken.EarningDisabled(_currentIndex);
@@ -1570,7 +1570,7 @@ contract SmartMTokenTests is Test {
     }
 
     function test_balanceOf_earner() external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1667,7 +1667,7 @@ contract SmartMTokenTests is Test {
 
         assertEq(_smartMToken.currentIndex(), 0);
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -1677,7 +1677,7 @@ contract SmartMTokenTests is Test {
 
         assertEq(_smartMToken.currentIndex(), 3 * _EXP_SCALED_ONE);
 
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), false);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), false);
 
         _smartMToken.disableEarning();
 
@@ -1697,7 +1697,7 @@ contract SmartMTokenTests is Test {
         uint240 transfer_,
         uint128 index_
     ) external {
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
 

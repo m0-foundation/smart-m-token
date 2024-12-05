@@ -69,7 +69,7 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     error EarningCannotBeReenabled();
 
     /**
-     * @notice Emitted when calling `stopEarning` for an account approved as earner by the Registrar.
+     * @notice Emitted when calling `mToken.stopEarning` for an account approved as an earner.
      * @param  account The account that is an approved earner.
      */
     error IsApprovedEarner(address account);
@@ -83,7 +83,7 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     error InsufficientBalance(address account, uint240 balance, uint240 amount);
 
     /**
-     * @notice Emitted when calling `startEarning` for an account not approved as earner by the Registrar.
+     * @notice Emitted when calling `mToken.startEarning` for an account not approved as an.
      * @param  account The account that is not an approved earner.
      */
     error NotApprovedEarner(address account);
@@ -195,25 +195,25 @@ interface ISmartMToken is IMigratable, IERC20Extended {
     function disableEarning() external;
 
     /**
-     * @notice Starts earning for `account` if allowed by the Registrar.
+     * @notice Starts earning for `account` if allowed by the Earner Manager.
      * @param  account The account to start earning for.
      */
     function startEarningFor(address account) external;
 
     /**
-     * @notice Starts earning for multiple accounts if individually allowed by the Registrar.
+     * @notice Starts earning for multiple accounts if individually allowed by the Earner Manager.
      * @param  accounts The accounts to start earning for.
      */
     function startEarningFor(address[] calldata accounts) external;
 
     /**
-     * @notice Stops earning for `account` if disallowed by the Registrar.
+     * @notice Stops earning for `account` if disallowed by the Earner Manager.
      * @param  account The account to stop earning for.
      */
     function stopEarningFor(address account) external;
 
     /**
-     * @notice Stops earning for multiple accounts if individually disallowed by the Registrar.
+     * @notice Stops earning for multiple accounts if individually disallowed by the Earner Manager.
      * @param  accounts The account to stop earning for.
      */
     function stopEarningFor(address[] calldata accounts) external;

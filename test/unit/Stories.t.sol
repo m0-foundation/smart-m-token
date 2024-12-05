@@ -11,10 +11,11 @@ import { SmartMToken } from "../../src/SmartMToken.sol";
 
 import { MockEarnerManager, MockM, MockRegistrar } from "../utils/Mocks.sol";
 
-contract Tests is Test {
+contract StoryTests is Test {
     uint56 internal constant _EXP_SCALED_ONE = 1e12;
 
-    bytes32 internal constant _EARNERS_LIST = "earners";
+    bytes32 internal constant _EARNERS_LIST_NAME = "earners";
+    bytes32 internal constant _ADMINS_LIST_NAME = "em_admins";
 
     address internal _alice = makeAddr("alice");
     address internal _bob = makeAddr("bob");
@@ -54,7 +55,7 @@ contract Tests is Test {
     function test_story() external {
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _smartMToken.enableEarning();
 
@@ -375,7 +376,7 @@ contract Tests is Test {
     function test_noExcessCreep() external {
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _mToken.setCurrentIndex(_EXP_SCALED_ONE + 3e11 - 1);
 
@@ -407,7 +408,7 @@ contract Tests is Test {
     function test_dustWrapping() external {
         _earnerManager.setEarnerDetails(_alice, true, 0, address(0));
         _earnerManager.setEarnerDetails(_bob, true, 0, address(0));
-        _registrar.setListContains(_EARNERS_LIST, address(_smartMToken), true);
+        _registrar.setListContains(_EARNERS_LIST_NAME, address(_smartMToken), true);
 
         _mToken.setCurrentIndex(_EXP_SCALED_ONE + 1);
 
