@@ -2,16 +2,16 @@
 
 pragma solidity 0.8.26;
 
-import { SmartMToken } from "../../src/SmartMToken.sol";
+import { WrappedMToken } from "../../src/WrappedMToken.sol";
 
-contract SmartMTokenHarness is SmartMToken {
+contract WrappedMTokenHarness is WrappedMToken {
     constructor(
         address mToken_,
         address registrar_,
         address earnerManager_,
         address excessDestination_,
         address migrationAdmin_
-    ) SmartMToken(mToken_, registrar_, earnerManager_, excessDestination_, migrationAdmin_) {}
+    ) WrappedMToken(mToken_, registrar_, earnerManager_, excessDestination_, migrationAdmin_) {}
 
     function internalWrap(address account_, address recipient_, uint240 amount_) external returns (uint240 wrapped_) {
         return _wrap(account_, recipient_, amount_);

@@ -5,20 +5,20 @@ pragma solidity 0.8.26;
 import { ContractHelper } from "../lib/common/src/libs/ContractHelper.sol";
 import { Proxy } from "../lib/common/src/Proxy.sol";
 
-import { SmartMToken } from "../src/SmartMToken.sol";
+import { WrappedMToken } from "../src/WrappedMToken.sol";
 import { EarnerManager } from "../src/EarnerManager.sol";
 
 contract DeployBase {
     /**
-     * @dev    Deploys Smart M Token.
+     * @dev    Deploys Wrapped M Token.
      * @param  mToken_                      The address of the M Token contract.
      * @param  registrar_                   The address of the Registrar contract.
      * @param  excessDestination_           The address of the excess destination.
      * @param  migrationAdmin_              The address of the Migration Admin.
      * @return earnerManagerImplementation_ The address of the deployed Earner Manager implementation.
      * @return earnerManagerProxy_          The address of the deployed Earner Manager proxy.
-     * @return smartMTokenImplementation_   The address of the deployed Smart M Token implementation.
-     * @return smartMTokenProxy_            The address of the deployed Smart M Token proxy.
+     * @return wrappedMTokenImplementation_   The address of the deployed Wrapped M Token implementation.
+     * @return wrappedMTokenProxy_            The address of the deployed Wrapped M Token proxy.
      */
     function deploy(
         address mToken_,
@@ -31,24 +31,24 @@ contract DeployBase {
         returns (
             address earnerManagerImplementation_,
             address earnerManagerProxy_,
-            address smartMTokenImplementation_,
-            address smartMTokenProxy_
+            address wrappedMTokenImplementation_,
+            address wrappedMTokenProxy_
         )
     {
         // Earner Manager Proxy constructor needs only known values.
         // Earner Manager Implementation constructor needs `earnerManagerImplementation_`.
-        // Smart M Token Implementation constructor needs `earnerManagerProxy_`.
-        // Smart M Token Proxy constructor needs `smartMTokenImplementation_`.
+        // Wrapped M Token Implementation constructor needs `earnerManagerProxy_`.
+        // Wrapped M Token Proxy constructor needs `wrappedMTokenImplementation_`.
 
         earnerManagerImplementation_ = address(new EarnerManager(registrar_, migrationAdmin_));
 
         earnerManagerProxy_ = address(new Proxy(earnerManagerImplementation_));
 
-        smartMTokenImplementation_ = address(
-            new SmartMToken(mToken_, registrar_, earnerManagerProxy_, excessDestination_, migrationAdmin_)
+        wrappedMTokenImplementation_ = address(
+            new WrappedMToken(mToken_, registrar_, earnerManagerProxy_, excessDestination_, migrationAdmin_)
         );
 
-        smartMTokenProxy_ = address(new Proxy(smartMTokenImplementation_));
+        wrappedMTokenProxy_ = address(new Proxy(wrappedMTokenImplementation_));
     }
 
     function _getExpectedEarnerManager(address deployer_, uint256 deployerNonce_) internal pure returns (address) {
@@ -70,32 +70,34 @@ contract DeployBase {
         return _getExpectedEarnerManagerProxy(deployer_, deployerNonce_);
     }
 
-    function _getExpectedSmartMTokenImplementation(
+    function _getExpectedWrappedMTokenImplementation(
         address deployer_,
         uint256 deployerNonce_
     ) internal pure returns (address) {
         return ContractHelper.getContractFrom(deployer_, deployerNonce_ + 2);
     }
 
-    function getExpectedSmartMTokenImplementation(
+    function getExpectedWrappedMTokenImplementation(
         address deployer_,
         uint256 deployerNonce_
     ) public pure virtual returns (address) {
-        return _getExpectedSmartMTokenImplementation(deployer_, deployerNonce_);
+        return _getExpectedWrappedMTokenImplementation(deployer_, deployerNonce_);
     }
 
-    function _getExpectedSmartMTokenProxy(address deployer_, uint256 deployerNonce_) internal pure returns (address) {
+    function _getExpectedWrappedMTokenProxy(address deployer_, uint256 deployerNonce_) internal pure returns (address) {
         return ContractHelper.getContractFrom(deployer_, deployerNonce_ + 3);
     }
 
-    function getExpectedSmartMTokenProxy(
+    function getExpectedWrappedMTokenProxy(
         address deployer_,
         uint256 deployerNonce_
     ) public pure virtual returns (address) {
-        return _getExpectedSmartMTokenProxy(deployer_, deployerNonce_);
+        return _getExpectedWrappedMTokenProxy(deployer_, deployerNonce_);
     }
 
-    function getDeployerNonceAfterSmartMTokenDeployment(uint256 deployerNonce_) public pure virtual returns (uint256) {
+    function getDeployerNonceAfterWrappedMTokenDeployment(
+        uint256 deployerNonce_
+    ) public pure virtual returns (uint256) {
         return deployerNonce_ + 4;
     }
 }

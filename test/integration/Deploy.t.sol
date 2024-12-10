@@ -5,7 +5,7 @@ pragma solidity 0.8.26;
 import { Test } from "../../lib/forge-std/src/Test.sol";
 
 import { IEarnerManager } from "../../src/interfaces/IEarnerManager.sol";
-import { ISmartMToken } from "../../src/interfaces/ISmartMToken.sol";
+import { IWrappedMToken } from "../../src/interfaces/IWrappedMToken.sol";
 
 import { DeployBase } from "../../script/DeployBase.sol";
 
@@ -24,8 +24,8 @@ contract Deploy is Test, DeployBase {
         (
             address earnerManagerImplementation_,
             address earnerManagerProxy_,
-            address smartMTokenImplementation_,
-            address smartMTokenProxy_
+            address wrappedMTokenImplementation_,
+            address wrappedMTokenProxy_
         ) = deploy(_M_TOKEN, _REGISTRAR, _EXCESS_DESTINATION, _MIGRATION_ADMIN);
         vm.stopPrank();
 
@@ -36,21 +36,21 @@ contract Deploy is Test, DeployBase {
         assertEq(IEarnerManager(earnerManagerProxy_).registrar(), _REGISTRAR);
         assertEq(IEarnerManager(earnerManagerProxy_).implementation(), earnerManagerImplementation_);
 
-        // Smart M Token Implementation assertions
-        assertEq(smartMTokenImplementation_, getExpectedSmartMTokenImplementation(_DEPLOYER, _DEPLOYER_NONCE));
-        assertEq(ISmartMToken(smartMTokenImplementation_).earnerManager(), earnerManagerProxy_);
-        assertEq(ISmartMToken(smartMTokenImplementation_).migrationAdmin(), _MIGRATION_ADMIN);
-        assertEq(ISmartMToken(smartMTokenImplementation_).mToken(), _M_TOKEN);
-        assertEq(ISmartMToken(smartMTokenImplementation_).registrar(), _REGISTRAR);
-        assertEq(ISmartMToken(smartMTokenImplementation_).excessDestination(), _EXCESS_DESTINATION);
+        // Wrapped M Token Implementation assertions
+        assertEq(wrappedMTokenImplementation_, getExpectedWrappedMTokenImplementation(_DEPLOYER, _DEPLOYER_NONCE));
+        assertEq(IWrappedMToken(wrappedMTokenImplementation_).earnerManager(), earnerManagerProxy_);
+        assertEq(IWrappedMToken(wrappedMTokenImplementation_).migrationAdmin(), _MIGRATION_ADMIN);
+        assertEq(IWrappedMToken(wrappedMTokenImplementation_).mToken(), _M_TOKEN);
+        assertEq(IWrappedMToken(wrappedMTokenImplementation_).registrar(), _REGISTRAR);
+        assertEq(IWrappedMToken(wrappedMTokenImplementation_).excessDestination(), _EXCESS_DESTINATION);
 
-        // Smart M Token Proxy assertions
-        assertEq(smartMTokenProxy_, getExpectedSmartMTokenProxy(_DEPLOYER, _DEPLOYER_NONCE));
-        assertEq(ISmartMToken(smartMTokenProxy_).earnerManager(), earnerManagerProxy_);
-        assertEq(ISmartMToken(smartMTokenProxy_).migrationAdmin(), _MIGRATION_ADMIN);
-        assertEq(ISmartMToken(smartMTokenProxy_).mToken(), _M_TOKEN);
-        assertEq(ISmartMToken(smartMTokenProxy_).registrar(), _REGISTRAR);
-        assertEq(ISmartMToken(smartMTokenProxy_).excessDestination(), _EXCESS_DESTINATION);
-        assertEq(ISmartMToken(smartMTokenProxy_).implementation(), smartMTokenImplementation_);
+        // Wrapped M Token Proxy assertions
+        assertEq(wrappedMTokenProxy_, getExpectedWrappedMTokenProxy(_DEPLOYER, _DEPLOYER_NONCE));
+        assertEq(IWrappedMToken(wrappedMTokenProxy_).earnerManager(), earnerManagerProxy_);
+        assertEq(IWrappedMToken(wrappedMTokenProxy_).migrationAdmin(), _MIGRATION_ADMIN);
+        assertEq(IWrappedMToken(wrappedMTokenProxy_).mToken(), _M_TOKEN);
+        assertEq(IWrappedMToken(wrappedMTokenProxy_).registrar(), _REGISTRAR);
+        assertEq(IWrappedMToken(wrappedMTokenProxy_).excessDestination(), _EXCESS_DESTINATION);
+        assertEq(IWrappedMToken(wrappedMTokenProxy_).implementation(), wrappedMTokenImplementation_);
     }
 }

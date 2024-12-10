@@ -13,16 +13,16 @@ import { Migratable } from "../lib/common/src/Migratable.sol";
 import { IEarnerManager } from "./interfaces/IEarnerManager.sol";
 import { IMTokenLike } from "./interfaces/IMTokenLike.sol";
 import { IRegistrarLike } from "./interfaces/IRegistrarLike.sol";
-import { ISmartMToken } from "./interfaces/ISmartMToken.sol";
+import { IWrappedMToken } from "./interfaces/IWrappedMToken.sol";
 
 /*
 
-███████╗███╗   ███╗ █████╗ ██████╗ ████████╗    ███╗   ███╗    ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗
-██╔════╝████╗ ████║██╔══██╗██╔══██╗╚══██╔══╝    ████╗ ████║    ╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║
-███████╗██╔████╔██║███████║██████╔╝   ██║       ██╔████╔██║       ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║
-╚════██║██║╚██╔╝██║██╔══██║██╔══██╗   ██║       ██║╚██╔╝██║       ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║
-███████║██║ ╚═╝ ██║██║  ██║██║  ██║   ██║       ██║ ╚═╝ ██║       ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║
-╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝       ╚═╝     ╚═╝       ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝
+██╗    ██╗██████╗  █████╗ ██████╗ ██████╗ ███████╗██████╗     ███╗   ███╗    ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗
+██║    ██║██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗    ████╗ ████║    ╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║
+██║ █╗ ██║██████╔╝███████║██████╔╝██████╔╝█████╗  ██║  ██║    ██╔████╔██║       ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║
+██║███╗██║██╔══██╗██╔══██║██╔═══╝ ██╔═══╝ ██╔══╝  ██║  ██║    ██║╚██╔╝██║       ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║
+╚███╔███╔╝██║  ██║██║  ██║██║     ██║     ███████╗██████╔╝    ██║ ╚═╝ ██║       ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║
+ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝     ╚══════╝╚═════╝     ╚═╝     ╚═╝       ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝
 
 */
 
@@ -30,7 +30,7 @@ import { ISmartMToken } from "./interfaces/ISmartMToken.sol";
  * @title  ERC20 Token contract for wrapping M into a non-rebasing token with claimable yields.
  * @author M^0 Labs
  */
-contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
+contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
     /* ============ Structs ============ */
 
     /**
@@ -53,43 +53,43 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /* ============ Variables ============ */
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     uint16 public constant HUNDRED_PERCENT = 10_000;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     bytes32 public constant EARNERS_LIST_IGNORED_KEY = "earners_list_ignored";
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     bytes32 public constant EARNERS_LIST_NAME = "earners";
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     bytes32 public constant CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX = "wm_claim_override_recipient";
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     bytes32 public constant MIGRATOR_KEY_PREFIX = "wm_migrator_v2";
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     address public immutable earnerManager;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     address public immutable migrationAdmin;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     address public immutable mToken;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     address public immutable registrar;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     address public immutable excessDestination;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     uint112 public principalOfTotalEarningSupply;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     uint240 public totalEarningSupply;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     uint240 public totalNonEarningSupply;
 
     /// @dev Mapping of accounts to their respective `AccountInfo` structs.
@@ -117,7 +117,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         address earnerManager_,
         address excessDestination_,
         address migrationAdmin_
-    ) ERC20Extended("Smart M by M^0", "MSMART", 6) {
+    ) ERC20Extended("M by M^0 (wrapped)", "wM", 6) {
         if ((mToken = mToken_) == address(0)) revert ZeroMToken();
         if ((registrar = registrar_) == address(0)) revert ZeroRegistrar();
         if ((earnerManager = earnerManager_) == address(0)) revert ZeroEarnerManager();
@@ -127,17 +127,17 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /* ============ Interactive Functions ============ */
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function wrap(address recipient_, uint256 amount_) external returns (uint240 wrapped_) {
         return _wrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function wrap(address recipient_) external returns (uint240 wrapped_) {
         return _wrap(msg.sender, recipient_, UIntMath.safe240(IMTokenLike(mToken).balanceOf(msg.sender)));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function wrapWithPermit(
         address recipient_,
         uint256 amount_,
@@ -151,7 +151,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         return _wrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function wrapWithPermit(
         address recipient_,
         uint256 amount_,
@@ -163,29 +163,29 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         return _wrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function unwrap(address recipient_, uint256 amount_) external returns (uint240 unwrapped_) {
         return _unwrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function unwrap(address recipient_) external returns (uint240 unwrapped_) {
         return _unwrap(msg.sender, recipient_, uint240(balanceWithYieldOf(msg.sender)));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function claimFor(address account_) external returns (uint240 yield_) {
         return _claim(account_, currentIndex());
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function claimExcess() external returns (uint240 excess_) {
         emit ExcessClaimed(excess_ = excess());
 
         IMTokenLike(mToken).transfer(excessDestination, excess_);
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function enableEarning() external {
         if (!_isThisApprovedEarner()) revert NotApprovedEarner(address(this));
         if (isEarningEnabled()) revert EarningIsEnabled();
@@ -203,7 +203,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         emit EarningEnabled(currentMIndex_);
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function disableEarning() external {
         if (_isThisApprovedEarner()) revert IsApprovedEarner(address(this));
         if (!isEarningEnabled()) revert EarningIsDisabled();
@@ -217,7 +217,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         emit EarningDisabled(currentMIndex_);
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function startEarningFor(address account_) external {
         if (!isEarningEnabled()) revert EarningIsDisabled();
 
@@ -225,7 +225,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         _startEarningFor(account_, _currentMIndex());
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function startEarningFor(address[] calldata accounts_) external {
         if (!isEarningEnabled()) revert EarningIsDisabled();
 
@@ -236,12 +236,12 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         }
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function stopEarningFor(address account_) external {
         _stopEarningFor(account_, currentIndex());
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function stopEarningFor(address[] calldata accounts_) external {
         uint128 currentIndex_ = currentIndex();
 
@@ -250,7 +250,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         }
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function setClaimRecipient(address claimRecipient_) external {
         _accounts[msg.sender].hasClaimRecipient = (_claimRecipients[msg.sender] = claimRecipient_) != address(0);
 
@@ -259,7 +259,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /* ============ Temporary Admin Migration ============ */
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function migrate(address migrator_) external {
         if (msg.sender != migrationAdmin) revert UnauthorizedMigration();
 
@@ -268,7 +268,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /* ============ View/Pure Functions ============ */
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function accruedYieldOf(address account_) public view returns (uint240 yield_) {
         Account storage accountInfo_ = _accounts[account_];
 
@@ -281,17 +281,17 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         return _accounts[account_].balance;
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function balanceWithYieldOf(address account_) public view returns (uint256 balance_) {
         return balanceOf(account_) + accruedYieldOf(account_);
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function lastIndexOf(address account_) public view returns (uint128 lastIndex_) {
         return _accounts[account_].lastIndex;
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function claimRecipientFor(address account_) public view returns (address recipient_) {
         return
             (_accounts[account_].hasClaimRecipient)
@@ -307,27 +307,27 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
                 );
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function currentIndex() public view returns (uint128 index_) {
         return isEarningEnabled() ? _currentMIndex() : _lastDisableEarningIndex();
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function isEarning(address account_) external view returns (bool isEarning_) {
         return _accounts[account_].isEarning;
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function isEarningEnabled() public view returns (bool isEnabled_) {
         return _enableDisableEarningIndices.length % 2 == 1;
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function wasEarningEnabled() public view returns (bool wasEarning_) {
         return _enableDisableEarningIndices.length != 0;
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function excess() public view returns (uint240 excess_) {
         unchecked {
             uint128 currentIndex_ = currentIndex();
@@ -338,7 +338,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         }
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWrappedMToken
     function totalAccruedYield() external view returns (uint240 yield_) {
         unchecked {
             uint240 projectedEarningSupply_ = _projectedEarningSupply(currentIndex());
@@ -655,10 +655,10 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         // NOTE: The behavior of `IMTokenLike.transferFrom` is known, so its return can be ignored.
         IMTokenLike(mToken).transferFrom(account_, address(this), amount_);
 
-        // NOTE: When this SmartMToken contract is earning, any amount of M sent to it is converted to a principal
+        // NOTE: When this WrappedMToken contract is earning, any amount of M sent to it is converted to a principal
         //       amount at the MToken contract, which when represented as a present amount, may be a rounding error
         //       amount less than `amount_`. In order to capture the real increase in M, the difference between the
-        //       starting and ending M balance is minted as SmartM.
+        //       starting and ending M balance is minted as token.
         _mint(recipient_, wrapped_ = UIntMath.safe240(IMTokenLike(mToken).balanceOf(address(this)) - startingBalance_));
     }
 
@@ -677,7 +677,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         // NOTE: The behavior of `IMTokenLike.transfer` is known, so its return can be ignored.
         IMTokenLike(mToken).transfer(recipient_, _getSafeTransferableM(amount_, currentIndex()));
 
-        // NOTE: When this SmartMToken contract is earning, any amount of M sent from it is converted to a principal
+        // NOTE: When this WrappedMToken contract is earning, any amount of M sent from it is converted to a principal
         //       amount at the MToken contract, which when represented as a present amount, may be a rounding error
         //       amount more than `amount_`. In order to capture the real decrease in M, the difference between the
         //       ending and starting M balance is returned.
