@@ -6,53 +6,33 @@ import { IndexingMath } from "../lib/common/src/libs/IndexingMath.sol";
 import { UIntMath } from "../lib/common/src/libs/UIntMath.sol";
 
 import { IERC20 } from "../lib/common/src/interfaces/IERC20.sol";
-import { ERC20Extended } from "../lib/common/src/ERC20Extended.sol";
 
+import { ERC20Extended } from "../lib/common/src/ERC20Extended.sol";
 import { Migratable } from "../lib/common/src/Migratable.sol";
 
-import { IEarnerManager } from "./interfaces/IEarnerManager.sol";
-import { IMTokenLike } from "./interfaces/IMTokenLike.sol";
-import { IRegistrarLike } from "./interfaces/IRegistrarLike.sol";
-import { ISmartMToken } from "./interfaces/ISmartMToken.sol";
+import { IMToken } from "./interfaces/IMToken.sol";
+import { IWorldDollar } from "./interfaces/IWorldDollar.sol";
 import { IWorldIDRouterLike } from "./interfaces/IWorldIDRouterLike.sol";
 
-/*
-
-███████╗███╗   ███╗ █████╗ ██████╗ ████████╗    ███╗   ███╗    ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗
-██╔════╝████╗ ████║██╔══██╗██╔══██╗╚══██╔══╝    ████╗ ████║    ╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║
-███████╗██╔████╔██║███████║██████╔╝   ██║       ██╔████╔██║       ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║
-╚════██║██║╚██╔╝██║██╔══██║██╔══██╗   ██║       ██║╚██╔╝██║       ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║
-███████║██║ ╚═╝ ██║██║  ██║██║  ██║   ██║       ██║ ╚═╝ ██║       ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║
-╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝       ╚═╝     ╚═╝       ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝
-
-*/
-
 /**
- * @title  ERC20 Token contract for wrapping M into a non-rebasing token with claimable yields.
+ * @title  ERC20 Token contract for a non-rebasing World Dollar token with claimable yields.
  * @author M^0 Labs
  */
-contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
+contract WorldDollar is IWorldDollar, Migratable, ERC20Extended {
     /* ============ Structs ============ */
 
     /**
      * @dev   Struct to represent an account's balance and yield earning details.
-     * @param isEarning         Whether the account is actively earning yield.
-     * @param balance           The present amount of tokens held by the account.
-     * @param version           The version of the Account struct.
-     * @param earningPrincipal  The earning principal for the account (0 for non-earning accounts).
-     * @param hasEarnerDetails  Whether the account has additional details for earning yield.
-     * @param hasClaimRecipient Whether the account has an explicitly set claim recipient.
+     * @param isEarning        Whether the account is actively earning yield.
+     * @param balance          The present amount of tokens held by the account.
+     * @param earningPrincipal The earning principal for the account (0 for non-earning accounts).
      */
     struct Account {
         // First Slot
         bool isEarning;
         uint240 balance;
-        uint8 version;
         // Second slot
         uint112 earningPrincipal;
-        bool hasEarnerDetails;
-        bool hasClaimRecipient;
-        bool hasNullifier;
     }
 
     /**
@@ -67,113 +47,76 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /* ============ Variables ============ */
 
-    /// @inheritdoc ISmartMToken
-    uint16 public constant HUNDRED_PERCENT = 10_000;
-
-    /// @inheritdoc ISmartMToken
-    bytes32 public constant EARNERS_LIST_IGNORED_KEY = "earners_list_ignored";
-
-    /// @inheritdoc ISmartMToken
-    bytes32 public constant EARNERS_LIST_NAME = "earners";
-
-    /// @inheritdoc ISmartMToken
-    bytes32 public constant CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX = "wm_claim_override_recipient";
-
-    /// @inheritdoc ISmartMToken
-    bytes32 public constant MIGRATOR_KEY_PREFIX = "wm_migrator_v3";
-
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     bytes32 public constant START_EARNING_SIGNAL_PREFIX = "start_earning";
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     bytes32 public constant STOP_EARNING_SIGNAL_PREFIX = "stop_earning";
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     bytes32 public constant CLAIM_SIGNAL_PREFIX = "claim";
 
-    /// @inheritdoc ISmartMToken
-    uint256 public constant EXTERNAL_NULLIFIER_HASH = uint256(keccak256("TODO"));
+    /// @inheritdoc IWorldDollar
+    uint256 public immutable externalNullifier;
 
-    /// @inheritdoc ISmartMToken
-    address public immutable earnerManager;
-
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     address public immutable migrationAdmin;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     address public immutable mToken;
 
-    /// @inheritdoc ISmartMToken
-    address public immutable registrar;
-
-    /// @inheritdoc ISmartMToken
-    address public immutable excessDestination;
-
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     address public immutable worldIDRouter;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     uint112 public totalEarningPrincipal;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     uint240 public totalEarningSupply;
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     uint240 public totalNonEarningSupply;
 
     /// @dev Mapping of accounts to their respective `AccountInfo` structs.
     mapping(address account => Account balance) internal _accounts;
 
-    /// @inheritdoc ISmartMToken
-    uint128 public enableMIndex;
-
-    /// @inheritdoc ISmartMToken
-    uint128 public disableIndex;
-
-    mapping(address account => address claimRecipient) internal _claimRecipients;
-
+    /// @dev Mapping of nullifier hashes to their respective `Nullifier` structs.
     mapping(uint256 nullifierHash => Nullifier nullifier) internal _nullifiers;
 
     /* ============ Constructor ============ */
 
     /**
      * @dev   Constructs the contract given an M Token address and migration admin.
-     *        Note that a proxy will not need to initialize since there are no mutable storage values affected.
-     * @param mToken_            The address of an M Token.
-     * @param registrar_         The address of a Registrar.
-     * @param earnerManager_     The address of an Earner Manager.
-     * @param excessDestination_ The address of an excess destination.
-     * @param migrationAdmin_    The address of a migration admin.
+     * @param mToken_        The address of an M Token.
+     * @param worldIDRouter_ The address of the World ID Router.
      */
     constructor(
+        string memory appId_,
+        string memory actionId_,
         address mToken_,
-        address registrar_,
-        address earnerManager_,
-        address excessDestination_,
-        address migrationAdmin_,
         address worldIDRouter_
-    ) ERC20Extended("Smart M by M^0", "MSMART", 6) {
+    ) ERC20Extended("World Dollar", "WorldUSD", 6) {
+        externalNullifier = _hashToField(abi.encodePacked(_hashToField(abi.encodePacked(appId_)), actionId_));
+
         if ((mToken = mToken_) == address(0)) revert ZeroMToken();
-        if ((registrar = registrar_) == address(0)) revert ZeroRegistrar();
-        if ((earnerManager = earnerManager_) == address(0)) revert ZeroEarnerManager();
-        if ((excessDestination = excessDestination_) == address(0)) revert ZeroExcessDestination();
-        if ((migrationAdmin = migrationAdmin_) == address(0)) revert ZeroMigrationAdmin();
         if ((worldIDRouter = worldIDRouter_) == address(0)) revert ZeroWorldIDRouter();
+
+        migrationAdmin = msg.sender;
     }
 
     /* ============ Interactive Functions ============ */
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function wrap(address recipient_, uint256 amount_) external returns (uint240 wrapped_) {
         return _wrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function wrap(address recipient_) external returns (uint240 wrapped_) {
         return _wrap(msg.sender, recipient_, UIntMath.safe240(_getMBalanceOf(msg.sender)));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function wrapWithPermit(
         address recipient_,
         uint256 amount_,
@@ -182,48 +125,45 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         bytes32 r_,
         bytes32 s_
     ) external returns (uint240 wrapped_) {
-        IMTokenLike(mToken).permit(msg.sender, address(this), amount_, deadline_, v_, r_, s_);
+        IMToken(mToken).permit(msg.sender, address(this), amount_, deadline_, v_, r_, s_);
 
         return _wrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function wrapWithPermit(
         address recipient_,
         uint256 amount_,
         uint256 deadline_,
         bytes memory signature_
     ) external returns (uint240 wrapped_) {
-        IMTokenLike(mToken).permit(msg.sender, address(this), amount_, deadline_, signature_);
+        IMToken(mToken).permit(msg.sender, address(this), amount_, deadline_, signature_);
 
         return _wrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function unwrap(address recipient_, uint256 amount_) external returns (uint240 unwrapped_) {
         return _unwrap(msg.sender, recipient_, UIntMath.safe240(amount_));
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function unwrap(address recipient_) external returns (uint240 unwrapped_) {
         return _unwrap(msg.sender, recipient_, uint240(balanceOf(msg.sender)));
     }
 
-    /// @inheritdoc ISmartMToken
-    function claimWithProof(
+    /// @inheritdoc IWorldDollar
+    function claim(
         address destination_,
         uint256 root_,
         uint256 groupId_,
         uint256 signalHash_,
         uint256 nullifierHash_,
-        uint256 externalNullifierHash_,
         uint256[8] calldata proof_
     ) external returns (uint240 yield_) {
-        _revertIfInvalidExternalNullifierHash(externalNullifierHash_);
-
         Nullifier storage nullifier_ = _nullifiers[nullifierHash_];
 
-        if (signalHash_ != uint256(keccak256(abi.encode(CLAIM_SIGNAL_PREFIX, nullifier_.nonce++, destination_)))) {
+        if (signalHash_ != _hashToField(abi.encodePacked(CLAIM_SIGNAL_PREFIX, nullifier_.nonce++, destination_))) {
             revert UnauthorizedSignal();
         }
 
@@ -231,72 +171,22 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
         if (account_ == address(0)) revert NullifierNotFound();
 
-        _verifySemaphoreProof(root_, groupId_, signalHash_, nullifierHash_, externalNullifierHash_, proof_);
+        _verifySemaphoreProof(root_, groupId_, signalHash_, nullifierHash_, proof_);
 
         return _claim(account_, destination_);
     }
 
-    /// @inheritdoc ISmartMToken
-    function claim(address destination_) external returns (uint240 yield_) {
-        _revertIfHasAssociatedNullifier(msg.sender);
-
-        return _claim(msg.sender, destination_);
-    }
-
-    /// @inheritdoc ISmartMToken
-    function claimFor(address account_) external returns (uint240 yield_) {
-        _revertIfHasAssociatedNullifier(account_);
-
-        address claimRecipient_ = claimRecipientFor(account_);
-
-        return _claim(account_, claimRecipient_ == address(0) ? account_ : claimRecipient_);
-    }
-
-    /// @inheritdoc ISmartMToken
-    function claimExcess() external returns (uint240 excess_) {
-        emit ExcessClaimed(excess_ = excess());
-
-        _transferM(excessDestination, excess_);
-    }
-
-    /// @inheritdoc ISmartMToken
-    function enableEarning() external {
-        if (!_isThisApprovedEarner()) revert NotApprovedEarner(address(this));
-        if (isEarningEnabled()) revert EarningIsEnabled();
-
-        emit EarningEnabled(enableMIndex = _currentMIndex());
-
-        IMTokenLike(mToken).startEarning();
-    }
-
-    /// @inheritdoc ISmartMToken
-    function disableEarning() external {
-        if (_isThisApprovedEarner()) revert IsApprovedEarner(address(this));
-        if (!isEarningEnabled()) revert EarningIsDisabled();
-
-        emit EarningDisabled(disableIndex = currentIndex());
-
-        delete enableMIndex;
-
-        IMTokenLike(mToken).stopEarning();
-    }
-
-    /// @inheritdoc ISmartMToken
-    function startEarningWithProof(
+    /// @inheritdoc IWorldDollar
+    function startEarning(
         uint256 root_,
         uint256 groupId_,
         uint256 signalHash_,
         uint256 nullifierHash_,
-        uint256 externalNullifierHash_,
         uint256[8] calldata proof_
     ) external {
-        _revertIfInvalidExternalNullifierHash(externalNullifierHash_);
-
         Nullifier storage nullifier_ = _nullifiers[nullifierHash_];
 
-        if (
-            signalHash_ != uint256(keccak256(abi.encode(START_EARNING_SIGNAL_PREFIX, nullifier_.nonce++, msg.sender)))
-        ) {
+        if (signalHash_ != _hashToField(abi.encode(START_EARNING_SIGNAL_PREFIX, nullifier_.nonce++, msg.sender))) {
             revert UnauthorizedSignal();
         }
 
@@ -304,54 +194,52 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
         nullifier_.account = msg.sender;
 
-        _startEarning(msg.sender, currentIndex());
+        _verifySemaphoreProof(root_, groupId_, signalHash_, nullifierHash_, proof_);
 
-        _accounts[msg.sender].hasNullifier = true;
+        Account storage accountInfo_ = _accounts[msg.sender];
 
-        _verifySemaphoreProof(root_, groupId_, signalHash_, nullifierHash_, externalNullifierHash_, proof_);
-    }
+        if (accountInfo_.isEarning) revert AlreadyEarning();
 
-    /// @inheritdoc ISmartMToken
-    function startEarningFor(address account_) external {
-        _startEarningIfApproved(account_, currentIndex());
-    }
+        uint240 balance_ = accountInfo_.balance;
+        uint112 earningPrincipal_ = IndexingMath.getPrincipalAmountRoundedDown(balance_, currentIndex());
 
-    /// @inheritdoc ISmartMToken
-    function startEarningFor(address[] calldata accounts_) external {
-        uint128 currentIndex_ = currentIndex();
+        accountInfo_.isEarning = true;
+        accountInfo_.earningPrincipal = earningPrincipal_;
 
-        for (uint256 index_; index_ < accounts_.length; ++index_) {
-            _startEarningIfApproved(accounts_[index_], currentIndex_);
+        _addTotalEarningSupply(balance_, earningPrincipal_);
+
+        unchecked {
+            totalNonEarningSupply -= balance_;
         }
+
+        emit StartedEarning(msg.sender, nullifierHash_);
     }
 
-    /// @inheritdoc ISmartMToken
-    function stopEarningWithProof(
+    /// @inheritdoc IWorldDollar
+    function stopEarning(
         address account_,
         uint256 root_,
         uint256 groupId_,
         uint256 signalHash_,
         uint256 nullifierHash_,
-        uint256 externalNullifierHash_,
         uint256[8] calldata proof_
     ) external {
         Nullifier storage nullifier_ = _nullifiers[nullifierHash_];
 
-        _revertIfInvalidExternalNullifierHash(externalNullifierHash_);
         _revertIfNullifierAccountMismatch(nullifier_.account, account_);
 
-        if (signalHash_ != uint256(keccak256(abi.encode(STOP_EARNING_SIGNAL_PREFIX, nullifier_.nonce++, account_)))) {
+        if (signalHash_ != _hashToField(abi.encode(STOP_EARNING_SIGNAL_PREFIX, nullifier_.nonce++, account_))) {
             revert UnauthorizedSignal();
         }
 
-        _stopEarning(account_);
-
         delete nullifier_.account;
 
-        _verifySemaphoreProof(root_, groupId_, signalHash_, nullifierHash_, externalNullifierHash_, proof_);
+        _verifySemaphoreProof(root_, groupId_, signalHash_, nullifierHash_, proof_);
+
+        _stopEarning(account_);
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function stopEarning(uint256 nullifierHash_) external {
         Nullifier storage nullifier_ = _nullifiers[nullifierHash_];
 
@@ -362,37 +250,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         _stopEarning(msg.sender);
     }
 
-    /// @inheritdoc ISmartMToken
-    function stopEarning() external {
-        _revertIfHasAssociatedNullifier(msg.sender);
-        _stopEarning(msg.sender);
-    }
-
-    /// @inheritdoc ISmartMToken
-    function stopEarningFor(address account_) public {
-        _revertIfHasAssociatedNullifier(account_);
-        _stopEarningIfNotApproved(account_);
-    }
-
-    /// @inheritdoc ISmartMToken
-    function stopEarningFor(address[] calldata accounts_) external {
-        for (uint256 index_; index_ < accounts_.length; ++index_) {
-            stopEarningFor(accounts_[index_]);
-            _revertIfHasAssociatedNullifier(accounts_[index_]);
-            _stopEarningIfNotApproved(accounts_[index_]);
-        }
-    }
-
-    /// @inheritdoc ISmartMToken
-    function setClaimRecipient(address claimRecipient_) external {
-        _accounts[msg.sender].hasClaimRecipient = (_claimRecipients[msg.sender] = claimRecipient_) != address(0);
-
-        emit ClaimRecipientSet(msg.sender, claimRecipient_);
-    }
-
     /* ============ Temporary Admin Migration ============ */
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function migrate(address migrator_) external {
         if (msg.sender != migrationAdmin) revert UnauthorizedMigration();
 
@@ -401,7 +261,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
 
     /* ============ View/Pure Functions ============ */
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function accruedYieldOf(address account_) public view returns (uint240 yield_) {
         Account storage accountInfo_ = _accounts[account_];
 
@@ -416,59 +276,34 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         return _accounts[account_].balance;
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function balanceWithYieldOf(address account_) external view returns (uint256 balance_) {
         return balanceOf(account_) + accruedYieldOf(account_);
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function earningPrincipalOf(address account_) public view returns (uint112 earningPrincipal_) {
         return _accounts[account_].earningPrincipal;
     }
 
-    /// @inheritdoc ISmartMToken
-    function claimRecipientFor(address account_) public view returns (address recipient_) {
-        Account storage accountInfo_ = _accounts[account_];
-
-        return
-            (accountInfo_.hasNullifier)
-                ? address(0)
-                : (accountInfo_.hasClaimRecipient)
-                    ? _claimRecipients[account_]
-                    : address(
-                        uint160(
-                            uint256(
-                                _getFromRegistrar(keccak256(abi.encode(CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX, account_)))
-                            )
-                        )
-                    );
-    }
-
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function currentIndex() public view returns (uint128 index_) {
-        uint128 disableIndex_ = disableIndex == 0 ? IndexingMath.EXP_SCALED_ONE : disableIndex;
-
-        return enableMIndex == 0 ? disableIndex_ : (disableIndex_ * _currentMIndex()) / enableMIndex;
+        return IMToken(mToken).currentIndex();
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function getNullifier(uint256 nullifierHash_) external view returns (address account_, uint96 nonce_) {
         Nullifier storage nullifier_ = _nullifiers[nullifierHash_];
 
         return (nullifier_.account, nullifier_.nonce);
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function isEarning(address account_) external view returns (bool isEarning_) {
         return _accounts[account_].isEarning;
     }
 
-    /// @inheritdoc ISmartMToken
-    function isEarningEnabled() public view returns (bool isEnabled_) {
-        return enableMIndex != 0;
-    }
-
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function excess() public view returns (uint240 excess_) {
         unchecked {
             uint128 currentIndex_ = currentIndex();
@@ -479,7 +314,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         }
     }
 
-    /// @inheritdoc ISmartMToken
+    /// @inheritdoc IWorldDollar
     function totalAccruedYield() external view returns (uint240 yield_) {
         unchecked {
             uint240 projectedEarningSupply_ = _projectedEarningSupply(currentIndex());
@@ -633,52 +468,9 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         emit Claimed(account_, destination_, yield_);
         emit Transfer(address(0), account_, yield_);
 
-        uint240 yieldNetOfFees_ = yield_;
+        if (destination_ == account_) return yield_;
 
-        if (accountInfo_.hasEarnerDetails) {
-            unchecked {
-                yieldNetOfFees_ -= _handleEarnerDetails(account_, yield_, currentIndex_);
-            }
-        }
-
-        if ((destination_ != account_) && (yieldNetOfFees_ != 0)) {
-            // NOTE: Watch out for a long chain of earning claim override recipients.
-            _transfer(account_, destination_, yieldNetOfFees_, currentIndex_);
-        }
-    }
-
-    /**
-     * @dev    Handles the computation and transfer of fees to the admin of an account with earner details.
-     * @param  account_      The address of the account to handle earner details for.
-     * @param  yield_        The yield accrued by the account.
-     * @param  currentIndex_ The current index to use to compute the principal amount.
-     * @return fee_          The fee amount that was transferred to the admin.
-     */
-    function _handleEarnerDetails(
-        address account_,
-        uint240 yield_,
-        uint128 currentIndex_
-    ) internal returns (uint240 fee_) {
-        (, uint16 feeRate_, address admin_) = _getEarnerDetails(account_);
-
-        if (admin_ == address(0)) {
-            // Prevent transferring to address(0) and remove `hasEarnerDetails` property going forward.
-            _accounts[account_].hasEarnerDetails = false;
-            return 0;
-        }
-
-        if (feeRate_ == 0) return 0;
-
-        // TODO: Inline `UIntMath.min16` in unchecked line once it's implemented.
-        feeRate_ = feeRate_ > HUNDRED_PERCENT ? HUNDRED_PERCENT : feeRate_; // Ensure fee rate is capped at 100%.
-
-        unchecked {
-            fee_ = (feeRate_ * yield_) / HUNDRED_PERCENT;
-        }
-
-        if (fee_ == 0) return 0;
-
-        _transfer(account_, admin_, fee_, currentIndex_);
+        _transfer(account_, destination_, yield_, currentIndex_);
     }
 
     /**
@@ -726,8 +518,28 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     }
 
     function _transferM(address recipient_, uint240 amount_) internal {
-        // NOTE: The behavior of `IMTokenLike.transfer` is known, so its return can be ignored.
-        IMTokenLike(mToken).transfer(recipient_, amount_);
+        // NOTE: The behavior of `IMToken.transfer` is known, so its return can be ignored.
+        IMToken(mToken).transfer(recipient_, amount_);
+    }
+
+    function _stopEarning(address account_) internal {
+        Account storage accountInfo_ = _accounts[account_];
+
+        if (!accountInfo_.isEarning) revert AlreadyNotEarning();
+
+        uint240 balance_ = accountInfo_.balance;
+        uint112 earningPrincipal_ = accountInfo_.earningPrincipal;
+
+        delete accountInfo_.isEarning;
+        delete accountInfo_.earningPrincipal;
+
+        _subtractTotalEarningSupply(balance_, earningPrincipal_);
+
+        unchecked {
+            totalNonEarningSupply += balance_;
+        }
+
+        emit StoppedEarning(account_);
     }
 
     /**
@@ -768,8 +580,8 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     function _wrap(address account_, address recipient_, uint240 amount_) internal returns (uint240 wrapped_) {
         uint256 startingBalance_ = _getMBalanceOf(address(this));
 
-        // NOTE: The behavior of `IMTokenLike.transferFrom` is known, so its return can be ignored.
-        IMTokenLike(mToken).transferFrom(account_, address(this), amount_);
+        // NOTE: The behavior of `IMToken.transferFrom` is known, so its return can be ignored.
+        IMToken(mToken).transferFrom(account_, address(this), amount_);
 
         // NOTE: When this SmartMToken contract is earning, any amount of M sent to it is converted to a principal
         //       amount at the MToken contract, which when represented as a present amount, may be a rounding error
@@ -799,97 +611,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         return UIntMath.safe240(startingBalance_ - _getMBalanceOf(address(this)));
     }
 
-    /**
-     * @dev   Tries to start earning for `account`, if allowed by the Registrar.
-     * @param account_      The account to start earning for.
-     * @param currentIndex_ The current index.
-     */
-    function _startEarningIfApproved(address account_, uint128 currentIndex_) internal {
-        (bool isEarner_, , address admin_) = _getEarnerDetails(account_);
-
-        if (!isEarner_) revert NotApprovedEarner(account_);
-
-        _startEarning(account_, currentIndex_);
-
-        _accounts[account_].hasEarnerDetails = admin_ != address(0); // Has earner details if an admin exists for this account.
-    }
-
-    /**
-     * @dev   Starts earning for `account`, if not already started.
-     * @param account_      The account to start earning for.
-     * @param currentIndex_ The current index.
-     */
-    function _startEarning(address account_, uint128 currentIndex_) internal {
-        Account storage accountInfo_ = _accounts[account_];
-
-        if (accountInfo_.isEarning) revert AlreadyEarning(account_);
-
-        uint240 balance_ = accountInfo_.balance;
-        uint112 earningPrincipal_ = IndexingMath.getPrincipalAmountRoundedDown(balance_, currentIndex_);
-
-        accountInfo_.isEarning = true;
-        accountInfo_.earningPrincipal = earningPrincipal_;
-
-        _addTotalEarningSupply(balance_, earningPrincipal_);
-
-        unchecked {
-            totalNonEarningSupply -= balance_;
-        }
-
-        emit StartedEarning(account_);
-    }
-
-    /**
-     * @dev   Tries to stops earning for `account`, if disallowed by the Registrar.
-     * @param account_ The account to stop earning for.
-     */
-    function _stopEarningIfNotApproved(address account_) internal {
-        (bool isEarner_, , ) = _getEarnerDetails(account_);
-
-        if (isEarner_) revert IsApprovedEarner(account_);
-
-        _stopEarning(account_);
-    }
-
-    /**
-     * @dev   Stops earning for `account`.
-     * @param account_  The account to stop earning for.
-     */
-    function _stopEarning(address account_) internal {
-        Account storage accountInfo_ = _accounts[account_];
-
-        if (!accountInfo_.isEarning) return;
-
-        uint240 balance_ = accountInfo_.balance;
-        uint112 earningPrincipal_ = accountInfo_.earningPrincipal;
-
-        delete accountInfo_.isEarning;
-        delete accountInfo_.earningPrincipal;
-        delete accountInfo_.hasEarnerDetails;
-        delete accountInfo_.hasNullifier;
-
-        _subtractTotalEarningSupply(balance_, earningPrincipal_);
-
-        unchecked {
-            totalNonEarningSupply += balance_;
-        }
-
-        emit StoppedEarning(account_);
-    }
-
     /* ============ Internal View/Pure Functions ============ */
-
-    /// @dev Returns the current index of the M Token.
-    function _currentMIndex() internal view returns (uint128 index_) {
-        return IMTokenLike(mToken).currentIndex();
-    }
-
-    /// @dev Returns whether this contract is a Registrar-approved earner.
-    function _isThisApprovedEarner() internal view returns (bool) {
-        return
-            _getFromRegistrar(EARNERS_LIST_IGNORED_KEY) != bytes32(0) ||
-            IRegistrarLike(registrar).listContains(EARNERS_LIST_NAME, address(this));
-    }
 
     /**
      * @dev    Compute the yield given an account's balance, earning principal, and the current index.
@@ -910,16 +632,6 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         }
     }
 
-    function _getEarnerDetails(
-        address account_
-    ) internal view returns (bool isEarner_, uint16 feeRate_, address admin_) {
-        return IEarnerManager(earnerManager).getEarnerDetails(account_);
-    }
-
-    function _getFromRegistrar(bytes32 key_) internal view returns (bytes32 value_) {
-        return IRegistrarLike(registrar).get(key_);
-    }
-
     /**
      * @dev    Compute the adjusted amount of M that can safely be transferred out given the current index.
      * @param  amount_       Some amount to be transferred out of this contract.
@@ -929,7 +641,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     function _getSafeTransferableM(uint240 amount_, uint128 currentIndex_) internal view returns (uint240 safeAmount_) {
         // If this contract is earning, adjust `amount_` to ensure it's M balance decrement is limited to `amount_`.
         return
-            IMTokenLike(mToken).isEarning(address(this))
+            IMToken(mToken).isEarning(address(this))
                 ? IndexingMath.getPresentAmountRoundedDown(
                     IndexingMath.getPrincipalAmountRoundedDown(amount_, currentIndex_),
                     currentIndex_
@@ -938,18 +650,16 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
     }
 
     /// @dev Returns the address of the contract to use as a migrator, if any.
-    function _getMigrator() internal view override returns (address migrator_) {
-        return
-            address(
-                uint160(
-                    // NOTE: A subsequent implementation should use a unique migrator prefix.
-                    uint256(_getFromRegistrar(keccak256(abi.encode(MIGRATOR_KEY_PREFIX, address(this)))))
-                )
-            );
+    function _getMigrator() internal pure override returns (address migrator_) {
+        return address(0);
     }
 
     function _getMBalanceOf(address account_) internal view returns (uint256 balance_) {
-        return IMTokenLike(mToken).balanceOf(account_);
+        return IMToken(mToken).balanceOf(account_);
+    }
+
+    function _hashToField(bytes memory value_) internal pure returns (uint256 hash_) {
+        return uint256(keccak256(value_)) >> 8;
     }
 
     /**
@@ -969,14 +679,6 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         if (amount_ == 0) revert InsufficientAmount(amount_);
     }
 
-    function _revertIfInvalidExternalNullifierHash(uint256 externalNullifierHash_) internal pure {
-        if (externalNullifierHash_ != EXTERNAL_NULLIFIER_HASH) revert InvalidExternalNullifierHash();
-    }
-
-    function _revertIfHasAssociatedNullifier(address account_) internal view {
-        if (_accounts[account_].hasNullifier) revert HasAssociatedNullifier();
-    }
-
     function _revertIfNullifierAccountMismatch(address nullifierAccount_, address account_) internal pure {
         if (nullifierAccount_ != account_) revert NullifierMismatch();
     }
@@ -994,7 +696,6 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
         uint256 groupId_,
         uint256 signalHash_,
         uint256 nullifierHash_,
-        uint256 externalNullifierHash_,
         uint256[8] calldata proof_
     ) internal view {
         IWorldIDRouterLike(worldIDRouter).verifyProof(
@@ -1002,7 +703,7 @@ contract SmartMToken is ISmartMToken, Migratable, ERC20Extended {
             groupId_,
             signalHash_,
             nullifierHash_,
-            externalNullifierHash_,
+            externalNullifier,
             proof_
         );
     }

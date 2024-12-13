@@ -1,8 +1,16 @@
-# Smart M Token - Smart Wrapper contract
+# World Dollar - M Wrapper contract
 
 ## Overview
 
-Non-rebasing M token alternative with an additional possibility to preserve and forward yield to earners.
+Non-rebasing World Dollar prototype enabling only verified World IDs to earn and claim yield. Backed by a Mock M Token
+with an admin that can mint, enable earning, and set the earner rate. In practice, the World Dollar would be backed by
+the M Token on the same chain, or on Ethereum Mainnet.
+
+## Deployments
+
+- Mock M Token: [0x310a3b737b87f8120137cc9b1ee65b4afaaf3736](https://worldchain-sepolia.explorer.alchemy.com/address/0x310a3b737b87f8120137cc9b1ee65b4afaaf3736)
+- World Dollar Proxy: [0x14082347B46A58A95175e3cb91906762782bdc29](https://worldchain-sepolia.explorer.alchemy.com/address/0x14082347b46a58a95175e3cb91906762782bdc29)
+- World Dollar Implementation: [0x2807ffc350A15D360275b0D2526EB6376efCC62B](https://worldchain-sepolia.explorer.alchemy.com/address/0x2807ffc350a15d360275b0d2526eb6376efcc62b)
 
 ## Development
 
@@ -103,27 +111,6 @@ Or to autofix some issues:
 ```bash
 npm run solhint-fix
 ```
-
-### CI
-
-The following Github Actions workflow are setup to run on push and pull requests:
-
-- [.github/workflows/coverage.yml](.github/workflows/coverage.yml)
-- [.github/workflows/test-gas.yml](.github/workflows/test-gas.yml)
-
-It will build the contracts and run the test coverage, as well as a gas report.
-
-The coverage report will be displayed in the PR by [github-actions-report-lcov](https://github.com/zgosalvez/github-actions-report-lcov) and the gas report by [foundry-gas-diff](https://github.com/Rubilmax/foundry-gas-diff).
-
-For the workflows to work, you will need to setup the `MNEMONIC_FOR_TESTS` and `MAINNET_RPC_URL` repository secrets in the settings of your Github repository.
-
-Some additional workflows are available if you wish to add fuzz, integration and invariant tests:
-
-- [.github/workflows/test-fuzz.yml](.github/workflows/test-fuzz.yml)
-- [.github/workflows/test-integration.yml](.github/workflows/test-integration.yml)
-- [.github/workflows/test-invariant.yml](.github/workflows/test-invariant.yml)
-
-You will need to uncomment them to activate them.
 
 ### Documentation
 
