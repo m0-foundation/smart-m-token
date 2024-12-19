@@ -335,7 +335,7 @@ contract WrappedMTokenTests is Test {
         _mToken.setBalanceOf(address(_wrappedMToken), 1_000);
 
         vm.prank(_alice);
-        assertEq(_wrappedMToken.unwrap(_alice, 1), 0);
+        assertEq(_wrappedMToken.unwrap(_alice, 1), 1);
 
         // Change due to principal round up on unwrap.
         assertEq(_wrappedMToken.lastIndexOf(_alice), _currentIndex);
@@ -344,7 +344,7 @@ contract WrappedMTokenTests is Test {
         assertEq(_wrappedMToken.totalEarningSupply(), 999);
 
         vm.prank(_alice);
-        assertEq(_wrappedMToken.unwrap(_alice, 999), 998);
+        assertEq(_wrappedMToken.unwrap(_alice, 999), 999);
 
         assertEq(_wrappedMToken.lastIndexOf(_alice), _currentIndex);
         assertEq(_wrappedMToken.balanceOf(_alice), 0);

@@ -51,6 +51,13 @@ interface IMTokenLike {
     /// @notice The current index that would be written to storage if `updateIndex` is called.
     function currentIndex() external view returns (uint128 currentIndex);
 
+    /**
+     * @notice The principal of an earner M token balance.
+     * @param  account   The account to get the principal balance of.
+     * @return principal The principal balance of the account.
+     */
+    function principalBalanceOf(address account) external view returns (uint240 principal);
+
     /// @notice The address of the TTG Registrar contract.
     function ttgRegistrar() external view returns (address ttgRegistrar);
 }

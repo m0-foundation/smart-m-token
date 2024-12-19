@@ -561,16 +561,13 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
      * @return wrapped_   The amount of wM minted.
      */
     function _wrap(address account_, address recipient_, uint240 amount_) internal returns (uint240 wrapped_) {
-        uint256 startingBalance_ = IMTokenLike(mToken).balanceOf(address(this));
-
         // NOTE: The behavior of `IMTokenLike.transferFrom` is known, so its return can be ignored.
         IMTokenLike(mToken).transferFrom(account_, address(this), amount_);
 
         // NOTE: When this WrappedMToken contract is earning, any amount of M sent to it is converted to a principal
         //       amount at the MToken contract, which when represented as a present amount, may be a rounding error
-        //       amount less than `amount_`. In order to capture the real increase in M, the difference between the
-        //       starting and ending M balance is minted as WrappedM.
-        _mint(recipient_, wrapped_ = UIntMath.safe240(IMTokenLike(mToken).balanceOf(address(this)) - startingBalance_));
+        //       amount less than `amount_`. This wil reduce excess by thee rounding error.
+        _mint(recipient_, wrapped_ = amount_);
     }
 
     /**
@@ -581,18 +578,13 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
      * @return unwrapped_ The amount of M withdrawn.
      */
     function _unwrap(address account_, address recipient_, uint240 amount_) internal returns (uint240 unwrapped_) {
-        _burn(account_, amount_);
-
-        uint256 startingBalance_ = IMTokenLike(mToken).balanceOf(address(this));
-
-        // NOTE: The behavior of `IMTokenLike.transfer` is known, so its return can be ignored.
-        IMTokenLike(mToken).transfer(recipient_, _getSafeTransferableM(amount_, currentIndex()));
-
         // NOTE: When this WrappedMToken contract is earning, any amount of M sent from it is converted to a principal
         //       amount at the MToken contract, which when represented as a present amount, may be a rounding error
-        //       amount more than `amount_`. In order to capture the real decrease in M, the difference between the
-        //       ending and starting M balance is returned.
-        return UIntMath.safe240(startingBalance_ - IMTokenLike(mToken).balanceOf(address(this)));
+        //       amount more than `amount_`. The real decrease in M may be larger than `amount_`.
+        _burn(account_, unwrapped_ = amount_);
+
+        // NOTE: The behavior of `IMTokenLike.transfer` is known, so its return can be ignored.
+        IMTokenLike(mToken).transfer(recipient_, _getSufficientTransferableM(recipient_, amount_, currentIndex()));
     }
 
     /* ============ Internal View/Pure Functions ============ */
@@ -641,6 +633,31 @@ contract WrappedMToken is IWrappedMToken, Migratable, ERC20Extended {
             IMTokenLike(mToken).isEarning(address(this))
                 ? IndexingMath.getPresentAmountRoundedDown(
                     IndexingMath.getPrincipalAmountRoundedDown(amount_, currentIndex_),
+                    currentIndex_
+                )
+                : amount_;
+    }
+
+    /**
+     * @dev    Compute the adjusted amount of M that must be transferred so the recipient receives at least that amount.
+     * @param  recipient_        The address of some recipient.
+     * @param  amount_           Some amount to be transferred out of the wrapper.
+     * @param  currentIndex_     The current index.
+     * @return sufficientAmount_ The adjusted amount that must be transferred.
+     */
+    function _getSufficientTransferableM(
+        address recipient_,
+        uint240 amount_,
+        uint128 currentIndex_
+    ) internal view returns (uint240 sufficientAmount_) {
+        // If the recipient is earning, adjust `amount_` to ensure it's M balance increments by at least `amount_`.
+        return
+            IMTokenLike(mToken).isEarning(recipient_)
+                ? IndexingMath.getPresentAmountRoundedUp(
+                    IndexingMath.getPrincipalAmountRoundedUp(
+                        uint240(IMTokenLike(mToken).balanceOf(recipient_)) + amount_,
+                        currentIndex_
+                    ) - uint112(IMTokenLike(mToken).principalBalanceOf(recipient_)),
                     currentIndex_
                 )
                 : amount_;

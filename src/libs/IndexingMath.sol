@@ -66,6 +66,16 @@ library IndexingMath {
     }
 
     /**
+     * @notice Helper function to calculate `(x * y) / EXP_SCALED_ONE`, rounded up.
+     * @dev    Inspired by USM (https://github.com/usmfum/USM/blob/master/contracts/WadMath.sol)
+     */
+    function multiply112By128Up(uint112 x_, uint128 y_) internal pure returns (uint240) {
+        unchecked {
+            return uint240(((uint256(x_) * y_) + (EXP_SCALED_ONE - 1)) / EXP_SCALED_ONE);
+        }
+    }
+
+    /**
      * @dev    Returns the present amount (rounded down) given the principal amount and an index.
      * @param  principalAmount_ The principal amount.
      * @param  index_           An index.
@@ -73,6 +83,16 @@ library IndexingMath {
      */
     function getPresentAmountRoundedDown(uint112 principalAmount_, uint128 index_) internal pure returns (uint240) {
         return multiply112By128Down(principalAmount_, index_);
+    }
+
+    /**
+     * @dev    Returns the present amount (rounded up) given the principal amount and an index.
+     * @param  principalAmount_ The principal amount.
+     * @param  index_           An index.
+     * @return The present amount rounded up.
+     */
+    function getPresentAmountRoundedUp(uint112 principalAmount_, uint128 index_) internal pure returns (uint240) {
+        return multiply112By128Up(principalAmount_, index_);
     }
 
     /**

@@ -311,7 +311,7 @@ contract Tests is Test {
         assertEq(_wrappedMToken.totalNonEarningSupply(), 50_000000);
         assertEq(_wrappedMToken.totalSupply(), 450_000000);
         assertEq(_wrappedMToken.totalAccruedYield(), 183_333340);
-        assertEq(_wrappedMToken.excess(), 600_000000);
+        assertEq(_wrappedMToken.excess(), 599_999995);
 
         vm.prank(_bob);
         _wrappedMToken.unwrap(_bob, 333_333330);
@@ -325,7 +325,7 @@ contract Tests is Test {
         assertEq(_wrappedMToken.totalNonEarningSupply(), 50_000000);
         assertEq(_wrappedMToken.totalSupply(), 250_000000);
         assertEq(_wrappedMToken.totalAccruedYield(), 50_000010);
-        assertEq(_wrappedMToken.excess(), 600_000000);
+        assertEq(_wrappedMToken.excess(), 599_999995);
 
         vm.prank(_carol);
         _wrappedMToken.unwrap(_carol, 250_000000);
@@ -339,7 +339,7 @@ contract Tests is Test {
         assertEq(_wrappedMToken.totalNonEarningSupply(), 50_000000);
         assertEq(_wrappedMToken.totalSupply(), 50_000000);
         assertEq(_wrappedMToken.totalAccruedYield(), 0);
-        assertEq(_wrappedMToken.excess(), 600_000010);
+        assertEq(_wrappedMToken.excess(), 600_000005);
 
         vm.prank(_dave);
         _wrappedMToken.unwrap(_dave, 50_000000);
@@ -353,7 +353,7 @@ contract Tests is Test {
         assertEq(_wrappedMToken.totalNonEarningSupply(), 0);
         assertEq(_wrappedMToken.totalSupply(), 0);
         assertEq(_wrappedMToken.totalAccruedYield(), 0);
-        assertEq(_wrappedMToken.excess(), 600_000010);
+        assertEq(_wrappedMToken.excess(), 600_000005);
 
         _wrappedMToken.claimExcess();
 
