@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
 import { IERC20Extended } from "../../lib/common/src/interfaces/IERC20Extended.sol";
-
-import { IMigratable } from "./IMigratable.sol";
+import { IMigratable } from "../../lib/common/src/interfaces/IMigratable.sol";
 
 /**
  * @title  Wrapped M Token interface extending Extended ERC20.
@@ -22,19 +21,26 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     event Claimed(address indexed account, address indexed recipient, uint240 yield);
 
     /**
-     * @notice Emitted when earning is enabled for the entire wrapper.
+     * @notice Emitted when `account` set their yield claim recipient.
+     * @param  account        The account that set their yield claim recipient.
+     * @param  claimRecipient The account that will receive the yield.
+     */
+    event ClaimRecipientSet(address indexed account, address indexed claimRecipient);
+
+    /**
+     * @notice Emitted when Wrapped M earning is enabled.
      * @param  index The index at the moment earning is enabled.
      */
     event EarningEnabled(uint128 index);
 
     /**
-     * @notice Emitted when earning is disabled for the entire wrapper.
+     * @notice Emitted when Wrapped M earning is disabled.
      * @param  index The index at the moment earning is disabled.
      */
     event EarningDisabled(uint128 index);
 
     /**
-     * @notice Emitted when the wrapper's excess M is claimed.
+     * @notice Emitted when this contract's excess M is claimed.
      * @param  excess The amount of excess M claimed.
      */
     event ExcessClaimed(uint240 excess);
@@ -62,8 +68,11 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     /// @notice Emitted when trying to enable earning after it has been explicitly disabled.
     error EarningCannotBeReenabled();
 
-    /// @notice Emitted when calling `stopEarning` for an account approved as earner by TTG.
-    error IsApprovedEarner();
+    /**
+     * @notice Emitted when calling `mToken.stopEarning` for an account approved as an earner.
+     * @param  account The account that is an approved earner.
+     */
+    error IsApprovedEarner(address account);
 
     /**
      * @notice Emitted when there is insufficient balance to decrement from `account`.
@@ -73,17 +82,32 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      */
     error InsufficientBalance(address account, uint240 balance, uint240 amount);
 
-    /// @notice Emitted when calling `startEarning` for an account not approved as earner by TTG.
-    error NotApprovedEarner();
+    /**
+     * @notice Emitted when calling `mToken.startEarning` for an account not approved as an.
+     * @param  account The account that is not an approved earner.
+     */
+    error NotApprovedEarner(address account);
 
     /// @notice Emitted when the non-governance migrate function is called by a account other than the migration admin.
     error UnauthorizedMigration();
+
+    /// @notice Emitted in an account is 0x0.
+    error ZeroAccount();
+
+    /// @notice Emitted in constructor if Earner Manager is 0x0.
+    error ZeroEarnerManager();
+
+    /// @notice Emitted in constructor if Excess Destination is 0x0.
+    error ZeroExcessDestination();
 
     /// @notice Emitted in constructor if M Token is 0x0.
     error ZeroMToken();
 
     /// @notice Emitted in constructor if Migration Admin is 0x0.
     error ZeroMigrationAdmin();
+
+    /// @notice Emitted in constructor if Registrar is 0x0.
+    error ZeroRegistrar();
 
     /* ============ Interactive Functions ============ */
 
@@ -101,6 +125,40 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      * @return wrapped   The amount of wM minted.
      */
     function wrap(address recipient) external returns (uint240 wrapped);
+
+    /**
+     * @notice Wraps `amount` M from the caller into wM for `recipient`, using a permit.
+     * @param  recipient The account receiving the minted wM.
+     * @param  amount    The amount of M deposited.
+     * @param  deadline  The last timestamp where the signature is still valid.
+     * @param  v         An ECDSA secp256k1 signature parameter (EIP-2612 via EIP-712).
+     * @param  r         An ECDSA secp256k1 signature parameter (EIP-2612 via EIP-712).
+     * @param  s         An ECDSA secp256k1 signature parameter (EIP-2612 via EIP-712).
+     * @return wrapped   The amount of wM minted.
+     */
+    function wrapWithPermit(
+        address recipient,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint240 wrapped);
+
+    /**
+     * @notice Wraps `amount` M from the caller into wM for `recipient`, using a permit.
+     * @param  recipient The account receiving the minted wM.
+     * @param  amount    The amount of M deposited.
+     * @param  deadline  The last timestamp where the signature is still valid.
+     * @param  signature An arbitrary signature (EIP-712).
+     * @return wrapped   The amount of wM minted.
+     */
+    function wrapWithPermit(
+        address recipient,
+        uint256 amount,
+        uint256 deadline,
+        bytes memory signature
+    ) external returns (uint240 wrapped);
 
     /**
      * @notice Unwraps `amount` wM from the caller into M for `recipient`.
@@ -125,28 +183,46 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     function claimFor(address account) external returns (uint240 yield);
 
     /**
-     * @notice Claims any excess M of the wrapper.
+     * @notice Claims any excess M of this contract.
      * @return excess The amount of excess claimed.
      */
     function claimExcess() external returns (uint240 excess);
 
-    /// @notice Enables earning for the wrapper if allowed by TTG and if it has never been done.
+    /// @notice Enables earning of Wrapped M if allowed by the Registrar and if it has never been done.
     function enableEarning() external;
 
-    /// @notice Disables earning for the wrapper if disallowed by TTG and if it has never been done.
+    /// @notice Disables earning of Wrapped M if disallowed by the Registrar and if it has never been done.
     function disableEarning() external;
 
     /**
-     * @notice Starts earning for `account` if allowed by TTG.
+     * @notice Starts earning for `account` if allowed by the Earner Manager.
      * @param  account The account to start earning for.
      */
     function startEarningFor(address account) external;
 
     /**
-     * @notice Stops earning for `account` if disallowed by TTG.
+     * @notice Starts earning for multiple accounts if individually allowed by the Earner Manager.
+     * @param  accounts The accounts to start earning for.
+     */
+    function startEarningFor(address[] calldata accounts) external;
+
+    /**
+     * @notice Stops earning for `account` if disallowed by the Earner Manager.
      * @param  account The account to stop earning for.
      */
     function stopEarningFor(address account) external;
+
+    /**
+     * @notice Stops earning for multiple accounts if individually disallowed by the Earner Manager.
+     * @param  accounts The account to stop earning for.
+     */
+    function stopEarningFor(address[] calldata accounts) external;
+
+    /**
+     * @notice Explicitly sets the recipient of any yield claimed for the caller.
+     * @param  claimRecipient The account that will receive the caller's yield.
+     */
+    function setClaimRecipient(address claimRecipient) external;
 
     /* ============ Temporary Admin Migration ============ */
 
@@ -157,6 +233,21 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     function migrate(address migrator) external;
 
     /* ============ View/Pure Functions ============ */
+
+    /// @notice 100% in basis points.
+    function HUNDRED_PERCENT() external pure returns (uint16 hundredPercent);
+
+    /// @notice Registrar key holding value of whether the earners list can be ignored or not.
+    function EARNERS_LIST_IGNORED_KEY() external pure returns (bytes32 earnersListIgnoredKey);
+
+    /// @notice Registrar key of earners list.
+    function EARNERS_LIST_NAME() external pure returns (bytes32 earnersListName);
+
+    /// @notice Registrar key prefix to determine the override recipient of an account's accrued yield.
+    function CLAIM_OVERRIDE_RECIPIENT_KEY_PREFIX() external pure returns (bytes32 claimOverrideRecipientKeyPrefix);
+
+    /// @notice Registrar key prefix to determine the migrator contract.
+    function MIGRATOR_KEY_PREFIX() external pure returns (bytes32 migratorKeyPrefix);
 
     /**
      * @notice Returns the yield accrued for `account`, which is claimable.
@@ -184,12 +275,12 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      * @param  account   The account being queried.
      * @return recipient The address of the recipient, if any, to override as the destination of claimed yield.
      */
-    function claimOverrideRecipientFor(address account) external view returns (address recipient);
+    function claimRecipientFor(address account) external view returns (address recipient);
 
-    /// @notice The current index of the wrapper's earning mechanism.
+    /// @notice The current index of Wrapped M's earning mechanism.
     function currentIndex() external view returns (uint128 index);
 
-    /// @notice The current excess M of the wrapper that is not earmarked for account balances or accrued yield.
+    /// @notice This contract's current excess M that is not earmarked for account balances or accrued yield.
     function excess() external view returns (uint240 excess);
 
     /**
@@ -199,20 +290,23 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
      */
     function isEarning(address account) external view returns (bool isEarning);
 
-    /// @notice Whether earning is enabled for the entire wrapper.
+    /// @notice Whether Wrapped M earning is enabled.
     function isEarningEnabled() external view returns (bool isEnabled);
 
-    /// @notice Whether earning has been enabled at least once or not.
+    /// @notice Whether Wrapped M earning has been enabled at least once.
     function wasEarningEnabled() external view returns (bool wasEnabled);
 
-    /// @notice The account that can bypass TTG and call the `migrate(address migrator)` function.
+    /// @notice The account that can bypass the Registrar and call the `migrate(address migrator)` function.
     function migrationAdmin() external view returns (address migrationAdmin);
 
     /// @notice The address of the M Token contract.
     function mToken() external view returns (address mToken);
 
-    /// @notice The address of the TTG registrar.
+    /// @notice The address of the Registrar.
     function registrar() external view returns (address registrar);
+
+    /// @notice The address of the Earner Manager.
+    function earnerManager() external view returns (address earnerManager);
 
     /// @notice The portion of total supply that is not earning yield.
     function totalNonEarningSupply() external view returns (uint240 totalSupply);
@@ -226,6 +320,6 @@ interface IWrappedMToken is IMigratable, IERC20Extended {
     /// @notice The principal of totalEarningSupply to help compute totalAccruedYield(), and thus excess().
     function principalOfTotalEarningSupply() external view returns (uint112 principalOfTotalEarningSupply);
 
-    /// @notice The address of the vault where excess is claimed to.
-    function vault() external view returns (address vault);
+    /// @notice The address of the destination where excess is claimed to.
+    function excessDestination() external view returns (address excessDestination);
 }

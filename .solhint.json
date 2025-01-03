@@ -13,7 +13,7 @@
     ],
     "compiler-version": [
       "error",
-      "0.8.23"
+      "0.8.26"
     ],
     "comprehensive-interface": "off",
     "const-name-snakecase": "off",

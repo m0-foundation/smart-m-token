@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
 /**
  * @title  Subset of Registrar interface required for source contracts.
@@ -23,7 +23,4 @@ interface IRegistrarLike {
      * @return contains Whether `list` contains `account` or not.
      */
     function listContains(bytes32 list, address account) external view returns (bool contains);
-
-    /// @notice Returns the address of the Vault.
-    function vault() external view returns (address vault);
 }

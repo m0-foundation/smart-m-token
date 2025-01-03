@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-pragma solidity 0.8.23;
+pragma solidity 0.8.26;
 
 /**
  * @title  Subset of M Token interface required for source contracts.
@@ -8,6 +8,36 @@ pragma solidity 0.8.23;
  */
 interface IMTokenLike {
     /* ============ Interactive Functions ============ */
+
+    /**
+     * @notice Approves `spender` to spend up to `amount` of the token balance of `owner`, via a signature.
+     * @param  owner    The address of the account who's token balance is being approved to be spent by `spender`.
+     * @param  spender  The address of an account allowed to spend on behalf of `owner`.
+     * @param  value    The amount of the allowance being approved.
+     * @param  deadline The last timestamp where the signature is still valid.
+     * @param  v        An ECDSA secp256k1 signature parameter (EIP-2612 via EIP-712).
+     * @param  r        An ECDSA secp256k1 signature parameter (EIP-2612 via EIP-712).
+     * @param  s        An ECDSA secp256k1 signature parameter (EIP-2612 via EIP-712).
+     */
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+
+    /**
+     * @notice Approves `spender` to spend up to `amount` of the token balance of `owner`, via a signature.
+     * @param  owner     The address of the account who's token balance is being approved to be spent by `spender`.
+     * @param  spender   The address of an account allowed to spend on behalf of `owner`.
+     * @param  value     The amount of the allowance being approved.
+     * @param  deadline  The last timestamp where the signature is still valid.
+     * @param  signature An arbitrary signature (EIP-712).
+     */
+    function permit(address owner, address spender, uint256 value, uint256 deadline, bytes memory signature) external;
 
     /**
      * @notice Allows a calling account to transfer `amount` tokens to `recipient`.
@@ -26,7 +56,7 @@ interface IMTokenLike {
      */
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool success);
 
-    /// @notice Starts earning for caller if allowed by TTG.
+    /// @notice Starts earning for caller if allowed by the Registrar.
     function startEarning() external;
 
     /// @notice Stops earning for caller.
@@ -50,7 +80,4 @@ interface IMTokenLike {
 
     /// @notice The current index that would be written to storage if `updateIndex` is called.
     function currentIndex() external view returns (uint128 currentIndex);
-
-    /// @notice The address of the TTG Registrar contract.
-    function ttgRegistrar() external view returns (address ttgRegistrar);
 }
